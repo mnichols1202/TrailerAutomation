@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="TrailerAutomationClientNet/TrailerAutomationClientNet.csproj" />
+  <Project Path="TrailerAutomationGateway/TrailerAutomationGateway.csproj" />
+</Solution>
