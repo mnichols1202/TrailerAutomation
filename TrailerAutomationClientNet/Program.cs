@@ -1,37 +1,42 @@
 ﻿using System;
-using System.Threading;
-using TrailerAutomationClientNet;
+using System.Net.Http;
+using System.Threading.Tasks;
 
-namespace TrailerAutomationClientNet;
-
-public static class Program
+namespace TrailerAutomationClientNet
 {
-    public static void Main(string[] args)
+    internal class Program
     {
-        Console.WriteLine("TrailerAutomationClient-Net (SHT31) starting up...");
-        Console.WriteLine("Press Ctrl+C to exit.");
-        Console.WriteLine();
-
-        // TODO: Later, read config for gateway address, ports, etc.
-
-        using var reader = new Sht31Reader();
-
-        while (true)
+        static async Task Main(string[] args)
         {
+            Console.WriteLine("Discovering TrailerAutomationGateway via mDNS...");
+
+            var result = await GatewayDiscovery.DiscoverAsync(TimeSpan.FromSeconds(5));
+
+            if (result is null)
+            {
+                Console.WriteLine("Gateway not found (mDNS discovery timed out).");
+                return;
+            }
+
+            var (ip, port) = result.Value;
+            var baseUrl = $"http://{ip}:{port}";
+
+            Console.WriteLine($"Gateway found at {baseUrl}");
+
+            using var http = new HttpClient { BaseAddress = new Uri(baseUrl) };
+
             try
             {
-                var (tempC, humidity) = reader.ReadTemperatureAndHumidity();
-
-                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] Temp: {tempC:F2} °C, Humidity: {humidity:F2} %");
-
-                // TODO: Later, send readings to TrailerAutomationGateway via HTTP/WebSocket/gRPC/etc.
+                var response = await http.GetStringAsync("/api/heartbeat");
+                Console.WriteLine($"Heartbeat: {response}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error reading SHT31: {ex.Message}");
+                Console.WriteLine("Error calling /api/heartbeat");
+                Console.WriteLine(ex.Message);
             }
 
-            Thread.Sleep(TimeSpan.FromSeconds(5));
+            // Your SHT31 loop / telemetry sending would go here next.
         }
     }
 }
