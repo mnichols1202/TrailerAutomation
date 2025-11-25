@@ -4,6 +4,10 @@ using Iot.Device.Sht3x;
 
 namespace TrailerAutomationClientNet
 {
+    /// <summary>
+    /// Thin wrapper around the SHT3x (SHT31) temperature / humidity sensor
+    /// on Raspberry Pi (I2C bus 1, address 0x44 by default).
+    /// </summary>
     public sealed class Sht31Reader : IDisposable
     {
         private readonly I2cDevice _i2cDevice;
@@ -14,46 +18,44 @@ namespace TrailerAutomationClientNet
         /// Create a new SHT31 reader.
         /// On Raspberry Pi, I2C bus is typically 1 and the default address is 0x44.
         /// </summary>
-        /// <param name="i2cBusId">I2C bus number (default 1 on Raspberry Pi).</param>
-        /// <param name="i2cAddress">Sensor I2C address (0x44 or 0x45).</param>
-        public Sht31Reader(int i2cBusId = 1, int i2cAddress = 0x44)
+        /// <param name="busId">I2C bus ID. On Pi this is almost always 1.</param>
+        /// <param name="deviceAddress">7-bit I2C address. Default SHT3x address is 0x44.</param>
+        public Sht31Reader(int busId = 1, int deviceAddress = 0x44)
         {
-            var connectionSettings = new I2cConnectionSettings(i2cBusId, i2cAddress);
+            var connectionSettings = new I2cConnectionSettings(busId, deviceAddress);
             _i2cDevice = I2cDevice.Create(connectionSettings);
-
-            // Create SHT3x driver
             _sensor = new Sht3x(_i2cDevice);
         }
 
         /// <summary>
-        /// Read temperature in degrees Celsius.
+        /// Reads only the temperature in Celsius.
         /// </summary>
-        public double ReadTemperatureCelsius()
+        public double ReadTemperatureC()
         {
             EnsureNotDisposed();
-            // The Sht3x driver exposes Temperature as a property
+            // Temperature is a UnitsNet.Temperature, use DegreesCelsius.
             return _sensor.Temperature.DegreesCelsius;
         }
 
         /// <summary>
-        /// Read relative humidity in percent.
+        /// Reads only the relative humidity in percent (0–100).
         /// </summary>
         public double ReadHumidityPercent()
         {
             EnsureNotDisposed();
-            // The Sht3x driver exposes Humidity as a property
+            // Humidity is UnitsNet.RelativeHumidity, use Percent.
             return _sensor.Humidity.Percent;
         }
 
         /// <summary>
-        /// Read both temperature (°C) and humidity (%) in one call.
+        /// Reads both temperature (°C) and humidity (%) in a single call.
         /// </summary>
-        public (double TemperatureCelsius, double HumidityPercent) ReadTemperatureAndHumidity()
+        public (double TemperatureC, double HumidityPercent) ReadMeasurement()
         {
             EnsureNotDisposed();
-            var temp = _sensor.Temperature.DegreesCelsius;
-            var hum = _sensor.Humidity.Percent;
-            return (temp, hum);
+            var temperatureC = _sensor.Temperature.DegreesCelsius;
+            var humidityPercent = _sensor.Humidity.Percent;
+            return (temperatureC, humidityPercent);
         }
 
         private void EnsureNotDisposed()
@@ -71,8 +73,8 @@ namespace TrailerAutomationClientNet
                 return;
             }
 
-            _sensor?.Dispose();
-            _i2cDevice?.Dispose();
+            _sensor.Dispose();
+            _i2cDevice.Dispose();
             _disposed = true;
         }
     }

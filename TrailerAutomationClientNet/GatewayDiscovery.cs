@@ -1,8 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Net.Sockets;
-using System.Threading;
 using System.Threading.Tasks;
 using Makaretu.Dns;
 
@@ -10,111 +9,122 @@ namespace TrailerAutomationClientNet
 {
     public static class GatewayDiscovery
     {
-        // Service type we advertise on the gateway side
-        // e.g. new ServiceProfile("TrailerAutomationGateway", "_trailer-gateway._tcp", 5000);
         private const string ServiceType = "_trailer-gateway._tcp";
+        private const string ServiceDomain = "local";
+        private static string FullServiceName => $"{ServiceType}.{ServiceDomain}"; // _trailer-gateway._tcp.local
 
         /// <summary>
-        /// Discover the TrailerAutomationGateway via mDNS/DNS-SD.
-        /// Returns (IP, port) or null on timeout.
+        /// Discover the TrailerAutomationGateway via mDNS and return its HTTP Uri.
         /// </summary>
-        public static async Task<(IPAddress ip, int port)?> DiscoverAsync(TimeSpan? timeout = null)
+        public static async Task<Uri?> DiscoverAsync(TimeSpan? timeout = null)
         {
-            timeout ??= TimeSpan.FromSeconds(5);
+            timeout ??= TimeSpan.FromSeconds(8); // Slightly longer default.
 
-            // mDNS transport + higher-level DNS-SD helper
             using var mdns = new MulticastService();
-            using var sd = new ServiceDiscovery(mdns);
+            var tcs = new TaskCompletionSource<Uri?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            var tcs = new TaskCompletionSource<(IPAddress ip, int port)?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // Track SRV targets (hostnames) and their ports until we get A/AAAA answers.
+            var pendingSrvTargets = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
 
-            // We capture the last SRV record we see that matches our service
-            DomainName? targetHost = null;
-            ushort? targetPort = null;
-
-            // Fired when a service instance PTR is discovered
-            void OnServiceInstanceDiscovered(object? sender, ServiceInstanceDiscoveryEventArgs e)
+            void TryResolve(MessageEventArgs e)
             {
-                // Example: "TrailerAutomationGateway._trailer-gateway._tcp.local"
-                var instanceName = e.ServiceInstanceName.ToString();
+                try
+                {
+                    // 1. Collect SRV records.
+                    foreach (var srv in e.Message.Answers.Concat(e.Message.AdditionalRecords).OfType<SRVRecord>())
+                    {
+                        var srvName = srv.Name?.ToString() ?? string.Empty;
+                        if (!srvName.Contains(ServiceType, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        var target = srv.Target?.ToString();
+                        if (string.IsNullOrWhiteSpace(target))
+                            continue;
+                        if (!pendingSrvTargets.ContainsKey(target))
+                            pendingSrvTargets[target] = srv.Port;
+                        // Immediately ask for A/AAAA if we have not yet received them in same packet.
+                        var needAddress = !e.Message.Answers.Concat(e.Message.AdditionalRecords).OfType<AddressRecord>().Any(a => string.Equals(a.Name?.ToString(), target, StringComparison.OrdinalIgnoreCase));
+                        if (needAddress)
+                        {
+                            var aQuery = new Message();
+                            aQuery.Questions.Add(new Question { Name = target, Type = DnsType.A, Class = DnsClass.IN });
+                            mdns.SendQuery(aQuery);
+                            var aaaaQuery = new Message();
+                            aaaaQuery.Questions.Add(new Question { Name = target, Type = DnsType.AAAA, Class = DnsClass.IN });
+                            mdns.SendQuery(aaaaQuery);
+                        }
+                    }
 
-                if (!instanceName.Contains(ServiceType, StringComparison.OrdinalIgnoreCase))
-                    return;
+                    if (pendingSrvTargets.Count == 0)
+                        return; // Nothing to match yet.
 
-                // Request SRV for this instance (host + port)
-                mdns.SendQuery(e.ServiceInstanceName, DnsClass.IN, DnsType.SRV);
+                    // 2. Match any A/AAAA records to pending targets.
+                    foreach (var addr in e.Message.Answers.Concat(e.Message.AdditionalRecords).OfType<AddressRecord>())
+                    {
+                        var host = addr.Name?.ToString();
+                        if (string.IsNullOrWhiteSpace(host))
+                            continue;
+                        if (pendingSrvTargets.TryGetValue(host, out var port))
+                        {
+                            var ip = addr.Address;
+                            if (ip == null)
+                                continue;
+                            var uri = new Uri($"http://{ip}:{port}/");
+                            if (!tcs.Task.IsCompleted)
+                            {
+                                tcs.TrySetResult(uri);
+                                return;
+                            }
+                        }
+                    }
+                }
+                catch { }
             }
 
-            // Fired whenever any mDNS answer is received
             void OnAnswerReceived(object? sender, MessageEventArgs e)
             {
-                // 1) Look for SRV records (service instance -> host + port)
-                var srvRecords = e.Message.Answers
-                    .OfType<SRVRecord>()
-                    .Where(r => r.Name.ToString().Contains(ServiceType, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+                if (tcs.Task.IsCompleted)
+                    return;
 
-                if (srvRecords.Any())
+                // Process SRV/A/AAAA in this packet.
+                TryResolve(e);
+
+                // Browse PTR responses and follow up with SRV queries for instances.
+                foreach (var ptr in e.Message.Answers.Concat(e.Message.AdditionalRecords).OfType<PTRRecord>())
                 {
-                    var srv = srvRecords.First();
-                    targetHost = srv.Target;
-                    targetPort = srv.Port;
-
-                    // Ask for A/AAAA records for the host
-                    mdns.SendQuery(srv.Target, DnsClass.IN, DnsType.A);
-                    mdns.SendQuery(srv.Target, DnsClass.IN, DnsType.AAAA);
-                    return;
-                }
-
-                // 2) If we already know the host+port, look for A/AAAA for that host
-                if (targetHost is null || targetPort is null)
-                    return;
-
-                var addrRecords = e.Message.Answers
-                    .OfType<AddressRecord>()
-                    .Where(a => a.Name.Equals(targetHost))
-                    .ToList();
-
-                if (!addrRecords.Any())
-                    return;
-
-                // Prefer IPv4 (simpler for Pi + your current stack)
-                var ipv4 = addrRecords
-                    .Select(a => a.Address)
-                    .FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork);
-
-                if (ipv4 != null && !tcs.Task.IsCompleted)
-                {
-                    tcs.TrySetResult((ipv4, targetPort.Value));
+                    if (!string.Equals(ptr.Name?.ToString(), FullServiceName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    // FIX: Makaretu.Dns PTRRecord exposes the pointed name as DomainName (not PointerDomainName)
+                    var instanceName = ptr.DomainName?.ToString();
+                    if (string.IsNullOrWhiteSpace(instanceName))
+                        continue;
+                    var srvQuery = new Message();
+                    srvQuery.Questions.Add(new Question { Name = instanceName, Type = DnsType.SRV, Class = DnsClass.IN });
+                    mdns.SendQuery(srvQuery);
                 }
             }
 
-            // Wire up events
-            sd.ServiceInstanceDiscovered += OnServiceInstanceDiscovered;
             mdns.AnswerReceived += OnAnswerReceived;
-
-            // Start mDNS and send query for our service instances
             mdns.Start();
 
-            var serviceDomain = new DomainName(ServiceType); // "_trailer-gateway._tcp"
-            sd.QueryServiceInstances(serviceDomain);
+            // Initial PTR browse.
+            var browse = new Message();
+            browse.Questions.Add(new Question { Name = FullServiceName, Type = DnsType.PTR, Class = DnsClass.IN });
+            mdns.SendQuery(browse);
 
-            // Wait for discovery or timeout
-            using var cts = new CancellationTokenSource(timeout.Value);
+            // Fallback: direct SRV query for generic instance name if user kept default instance.
+            var defaultInstanceFqdn = $"TrailerAutomationGateway.{FullServiceName}"; // Instance.ServiceType.local
+            var directSrv = new Message();
+            directSrv.Questions.Add(new Question { Name = defaultInstanceFqdn, Type = DnsType.SRV, Class = DnsClass.IN });
+            mdns.SendQuery(directSrv);
 
-            await using var _ = cts.Token.Register(() =>
-            {
-                if (!tcs.Task.IsCompleted)
-                    tcs.TrySetResult(null);
-            });
+            var discoveryTask = tcs.Task;
+            var timeoutTask = Task.Delay(timeout.Value);
+            var completed = await Task.WhenAny(discoveryTask, timeoutTask).ConfigureAwait(false);
 
-            var result = await tcs.Task;
-
-            // Cleanup event handlers before returning
-            sd.ServiceInstanceDiscovered -= OnServiceInstanceDiscovered;
             mdns.AnswerReceived -= OnAnswerReceived;
+            mdns.Stop();
 
-            return result;
+            return completed == discoveryTask ? discoveryTask.Result : null;
         }
     }
 }
