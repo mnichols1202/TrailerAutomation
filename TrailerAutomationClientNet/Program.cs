@@ -1,65 +1,75 @@
 ﻿using System;
 using System.Net.Http;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace TrailerAutomationClientNet
 {
     internal class Program
     {
+        // Heartbeat interval (adjust as needed)
+        private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(10);
+
         static async Task Main(string[] args)
         {
-            Console.WriteLine("TrailerAutomationClientNet starting on Raspberry Pi Zero 2 W...");
+            Console.WriteLine("TrailerAutomationClientNet starting...");
             Console.WriteLine("Discovering TrailerAutomationGateway via mDNS...");
 
-            var gatewayUri = await GatewayDiscovery.DiscoverAsync(TimeSpan.FromSeconds(5));
+            // Discover gateway using your GatewayDiscovery.cs
+            Uri? gatewayUri = await GatewayDiscovery.DiscoverAsync(TimeSpan.FromSeconds(8));
 
             if (gatewayUri is null)
             {
-                Console.WriteLine("No TrailerAutomationGateway found via mDNS within timeout.");
-                Console.WriteLine("Ensure the gateway is running and on the same network.");
+                Console.WriteLine("Gateway discovery failed: No TrailerAutomationGateway found.");
                 return;
             }
 
-            Console.WriteLine($"Discovered gateway at: {gatewayUri}");
+            Console.WriteLine($"Discovered Gateway: {gatewayUri}");
 
             using var http = new HttpClient
             {
-                BaseAddress = gatewayUri
+                BaseAddress = gatewayUri,
+                Timeout = TimeSpan.FromSeconds(5)
             };
 
-            // Test the heartbeat endpoint
-            try
-            {
-                Console.WriteLine("Calling /api/heartbeat on the gateway...");
-                var response = await http.GetStringAsync("/api/heartbeat");
-                Console.WriteLine($"Heartbeat response: {response}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error calling /api/heartbeat on the gateway.");
-                Console.WriteLine(ex);
-                return;
-            }
+            // Device identity (customize per device)
+            string clientId = Environment.MachineName;      // Pi hostname
+            string deviceType = "PiZero2W";
+            string friendlyName = "Zero2W-SensorNode";
 
-            // Quick SHT31 smoke test – optional for now
-            try
+            Console.WriteLine($"ClientId: {clientId}");
+            Console.WriteLine($"DeviceType: {deviceType}");
+            Console.WriteLine($"FriendlyName: {friendlyName}");
+            Console.WriteLine("Starting heartbeat loop...");
+
+            while (true)
             {
-                using var sensor = new Sht31Reader();
+                try
+                {
+                    var hb = new
+                    {
+                        ClientId = clientId,
+                        DeviceType = deviceType,
+                        FriendlyName = friendlyName
+                    };
 
-                var (tempC, humidityPercent) = sensor.ReadMeasurement();
-                Console.WriteLine($"Initial SHT31 reading -> Temp: {tempC:F1} °C, Humidity: {humidityPercent:F1} %");
+                    string json = JsonSerializer.Serialize(hb);
+                    using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                // This is where you’ll later add a loop that periodically
-                // sends telemetry to the gateway, e.g. /api/telemetry
+                    var response = await http.PostAsync("/api/heartbeat", content);
+                    response.EnsureSuccessStatusCode();
+
+                    string respBody = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"[{DateTime.Now:T}] Heartbeat OK: {respBody}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[{DateTime.Now:T}] Heartbeat failed: {ex.Message}");
+                }
+
+                await Task.Delay(HeartbeatInterval);
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("SHT31 sensor read failed.");
-                Console.WriteLine(ex);
-            }
-
-            Console.WriteLine("Client run complete. Press ENTER to exit.");
-            Console.ReadLine();
         }
     }
 }
