@@ -22,12 +22,11 @@ namespace TrailerAutomationClientNet
         {
             timeout ??= TimeSpan.FromSeconds(8); // Slightly longer default.
 
+            // Prefer IPv4 for mDNS on constrained networks
+            MulticastService.UseIpv4 = true;
+            MulticastService.UseIpv6 = false;
 
             using var mdns = new MulticastService();
-            // Prefer IPv4 for mDNS on constrained networks
-            mdns.UseIpv4 = true;
-            mdns.UseIpv6 = false;
-
             var tcs = new TaskCompletionSource<Uri?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             // Track SRV targets (hostnames) and their ports until we get A answers.
