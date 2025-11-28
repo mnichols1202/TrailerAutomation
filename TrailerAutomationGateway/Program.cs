@@ -9,6 +9,7 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{gatewayPort}");
 
 // Services
 builder.Services.AddSingleton<ClientRegistry>();
+builder.Services.AddSingleton<SensorReadingRegistry>();   // sensor registry
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -102,7 +103,65 @@ app.MapGet("/api/clients/{clientId}", (string clientId, ClientRegistry registry)
 .WithName("GetClientById")
 .WithOpenApi();
 
-// mDNS advertising (assuming you already have MdnsHost implemented)
+// Receive temperature and humidity readings from a client
+app.MapPost("/api/sensor-readings", (SensorReadingRequest request, HttpContext httpContext, SensorReadingRegistry registry) =>
+{
+    var nowUtc = DateTime.UtcNow;
+    var remoteIp = httpContext.Connection.RemoteIpAddress?.ToString();
+
+    // Normalize clientId to avoid null/whitespace issues
+    var clientId = string.IsNullOrWhiteSpace(request.ClientId)
+        ? "unknown"
+        : request.ClientId;
+
+    Console.WriteLine(
+        $"[Sensor] POST /api/sensor-readings {nowUtc:O} " +
+        $"ClientId={clientId} " +
+        $"TempC={request.TemperatureC:F2} " +
+        $"Humidity={request.HumidityPercent:F2} " +
+        $"RemoteIP={remoteIp ?? "n/a"}");
+
+    registry.RegisterReading(
+        clientId,
+        request.TemperatureC,
+        request.HumidityPercent,
+        nowUtc,
+        remoteIp
+    );
+
+    return Results.Ok(new
+    {
+        status = "OK",
+        timestampUtc = nowUtc
+    });
+})
+.WithName("PostSensorReading")
+.WithOpenApi();
+
+// Get all latest sensor readings
+app.MapGet("/api/sensor-readings", (SensorReadingRegistry registry) =>
+{
+    var readings = registry.GetAllReadings();
+    Console.WriteLine($"[Sensor] GET /api/sensor-readings {DateTime.UtcNow:O} Count={readings.Count}");
+    return Results.Ok(readings);
+})
+.WithName("GetSensorReadings")
+.WithOpenApi();
+
+// Get latest sensor reading for a specific client
+app.MapGet("/api/sensor-readings/{clientId}", (string clientId, SensorReadingRegistry registry) =>
+{
+    var reading = registry.GetReading(clientId);
+    Console.WriteLine(
+        $"[Sensor] GET /api/sensor-readings/{clientId} {DateTime.UtcNow:O} " +
+        $"Found={(reading != null)}");
+
+    return reading is null ? Results.NotFound() : Results.Ok(reading);
+})
+.WithName("GetSensorReadingByClientId")
+.WithOpenApi();
+
+// mDNS advertising
 app.Lifetime.ApplicationStarted.Register(() =>
 {
     try
@@ -122,7 +181,7 @@ app.Lifetime.ApplicationStopping.Register(() =>
     try
     {
         MdnsHost.Stop();
-        Console.WriteLine("[mDNS] Stopped mDNS advertiser");
+        Console.WriteLine("[Shutdown] Stopped mDNS advertiser");
     }
     catch (Exception ex)
     {
