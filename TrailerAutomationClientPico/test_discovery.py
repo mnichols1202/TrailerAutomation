@@ -77,5 +77,6 @@ def test_discovery():
         print("  - Gateway has mDNS enabled")
         print("  - Firewall is not blocking mDNS (port 5353)")
 
-if __name__ == "__main__":
-    test_discovery()
+# Auto-run when imported
+print("\n")
+test_discovery()

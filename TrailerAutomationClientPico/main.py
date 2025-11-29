@@ -3,18 +3,34 @@ TrailerAutomationClientPico - MicroPython 1.26 for Pico 2 W
 Main entry point for the trailer automation client.
 """
 
+print("\n" + "="*60)
+print("Starting TrailerAutomationClientPico...")
+print("="*60)
+
 import time
 import json
 import machine
 import network
-import urequests as requests
 import _thread
+
+print("Core imports successful")
+
+# Try importing urequests (needs to be installed via mip)
+try:
+    import urequests as requests
+    print("urequests imported successfully")
+except ImportError as e:
+    print(f"ERROR: urequests not installed!")
+    print("To install, run in REPL:")
+    print("  import mip")
+    print('  mip.install("urequests")')
+    raise
+
 from gateway_discovery import discover_gateway
 from sht31_reader import Sht31Reader
-from config import Config
+import config
 
-# Load configuration
-config = Config()
+print("All imports successful!")
 
 # Status LED on Pico 2 W
 led = machine.Pin("LED", machine.Pin.OUT)
@@ -28,35 +44,130 @@ def blink_led(times=1, delay_ms=100):
         time.sleep_ms(delay_ms)
 
 def connect_wifi():
-    """Connect to WiFi network."""
+    """Connect to WiFi network - using test_wifi.py working approach."""
+    print("\n=== WiFi Connection ===")
+    
+    # Note: rp2.country() breaks WiFi scanning on this build - do not use!
+    
+    # Proper WiFi initialization for Pico 2W (same as test_wifi.py)
     wlan = network.WLAN(network.STA_IF)
+    
+    # Clean state - deactivate first
+    wlan.active(False)
+    time.sleep(0.5)
+    
+    # Activate with proper timing
     wlan.active(True)
+    time.sleep(2)  # Give CYW43 chip time to initialize
+    
+    print(f"WLAN activated: {wlan.active()}")
+    
+    # Apply critical WiFi optimizations
+    try:
+        wlan.config(pm=0xa11140)  # CRITICAL: Disable power management
+        print("✓ Power management: DISABLED")
+    except Exception as e:
+        print(f"! Power management: {e}")
+    
+    # Note: country config not supported in this MicroPython build
+    
+    try:
+        wlan.config(txpower=20)
+        print("✓ TX Power: 20 dBm")
+    except Exception as e:
+        print(f"! TX Power: {e}")
+    
+    try:
+        wlan.config(hostname='Pico2W-Trailer')
+        print("✓ Hostname: Pico2W-Trailer")
+    except Exception as e:
+        print(f"! Hostname: {e}")
     
     if wlan.isconnected():
-        print("Already connected to WiFi")
-        print(f"IP: {wlan.ifconfig()[0]}")
+        print("\nAlready connected!")
+        ifconfig = wlan.ifconfig()
+        print(f"IP: {ifconfig[0]}")
         return True
     
-    print(f"Connecting to WiFi: {config.WIFI_SSID}")
-    wlan.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
+    # Scan for networks
+    print(f"\nScanning for networks...")
+    try:
+        networks = wlan.scan()
+        print(f"Found {len(networks)} networks")
+        
+        target_found = False
+        for net in networks:
+            ssid = net[0].decode('utf-8')
+            rssi = net[3]
+            channel = net[2]
+            
+            is_target = (ssid == config.WIFI_SSID)
+            if is_target:
+                target_found = True
+                print(f">>> {ssid} {rssi}dBm Ch:{channel} <<< TARGET")
+            
+        if not target_found:
+            print(f"! Target SSID '{config.WIFI_SSID}' NOT FOUND")
+            print("  Attempting connection anyway...")
+            
+    except Exception as e:
+        print(f"✗ Scan error: {e}")
+        print("  WiFi chip may need reset (unplug USB, wait 10s)")
+        return False
+    
+    # Connect
+    print(f"\nConnecting to '{config.WIFI_SSID}'...")
+    try:
+        wlan.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
+    except Exception as e:
+        print(f"✗ Connection failed: {e}")
+        return False
     
     # Wait for connection
-    max_wait = 20
+    max_wait = 30
+    print("Monitoring connection (30s timeout)...")
+    
+    status_names = {
+        -3: "BAD_AUTH", -2: "TIMEOUT", -1: "GENERIC_FAIL",
+        0: "IDLE", 1: "CONNECTING", 2: "WRONG_PASSWORD",
+        3: "NO_AP_FOUND", 4: "CONNECT_FAIL", 5: "GOT_IP"
+    }
+    
+    last_status = None
     while max_wait > 0:
+        status = wlan.status()
+        status_str = status_names.get(status, f"UNKNOWN({status})")
+        
+        if status != last_status or max_wait % 5 == 0:
+            print(f"  [{max_wait:2}s] {status_str}")
+            last_status = status
+        
         if wlan.isconnected():
+            print(f"  [{max_wait:2}s] {status_str} - SUCCESS!\n")
             break
+        
+        # Fatal errors
+        if status in [-3, 2]:
+            print(f"\n! ERROR: {status_str} - Wrong password or auth issue")
+            return False
+        elif status in [3, 4]:
+            print(f"\n! ERROR: {status_str} - Network not found or connection failed")
+            return False
+        
         max_wait -= 1
-        print("Waiting for connection...")
-        blink_led(1, 50)
         time.sleep(1)
     
     if wlan.isconnected():
-        ip = wlan.ifconfig()[0]
-        print(f"Connected! IP: {ip}")
-        blink_led(3, 100)
+        ifconfig = wlan.ifconfig()
+        print("=" * 50)
+        print("✓✓✓ CONNECTED! ✓✓✓")
+        print("=" * 50)
+        print(f"IP:      {ifconfig[0]}")
+        print(f"Gateway: {ifconfig[2]}")
+        print(f"DNS:     {ifconfig[3]}")
         return True
     else:
-        print("Failed to connect to WiFi")
+        print(f"\n! Connection TIMEOUT")
         return False
 
 def send_heartbeat(gateway_url, client_id, device_type, friendly_name):
@@ -196,13 +307,21 @@ def main():
         # Wait for next heartbeat
         time.sleep(config.HEARTBEAT_INTERVAL_SEC)
 
-# Entry point
-if __name__ == "__main__":
+# Auto-run on boot
+# In MicroPython, main.py is automatically imported after boot.py
+try:
+    main()
+except KeyboardInterrupt:
+    print("\n\n=== Stopped by user (CTRL+C) ===")
+    print("Device halted. Press CTRL+D to soft reset or reconnect.")
+except Exception as e:
+    print(f"\n!!! Fatal error: {e}")
+    import sys
+    sys.print_exception(e)
+    print("\n=== System will restart in 10 seconds ===")
+    print("Press CTRL+C to cancel restart")
     try:
-        main()
+        time.sleep(10)
+        machine.reset()
     except KeyboardInterrupt:
-        print("\nStopped by user")
-    except Exception as e:
-        print(f"Fatal error: {e}")
-        import sys
-        sys.print_exception(e)
+        print("Restart cancelled")

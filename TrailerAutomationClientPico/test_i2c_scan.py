@@ -148,13 +148,7 @@ def scan_all_buses():
         
         time.sleep_ms(100)
 
-if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "all":
-        scan_all_buses()
-    else:
-        # Scan default configuration
-        scan_i2c(i2c_id=0, sda_pin=0, scl_pin=1)
-        
-        print("\nTip: To scan all buses, run: python test_i2c_scan.py all")
+# Auto-run when imported
+print("\n")
+scan_i2c(i2c_id=0, sda_pin=0, scl_pin=1)
+print("\nTo scan all I2C buses, run: scan_all_buses()")

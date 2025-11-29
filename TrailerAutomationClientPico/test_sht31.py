@@ -54,5 +54,6 @@ def test_sht31():
         import sys
         sys.print_exception(e)
 
-if __name__ == "__main__":
-    test_sht31()
+# Auto-run when imported
+print("\n")
+test_sht31()
