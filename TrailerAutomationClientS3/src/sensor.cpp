@@ -3,10 +3,14 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <Wire.h>
+#include <Adafruit_SHT31.h>
 
 #include "config.h"
 #include "logging.h"
 #include "network.h"
+
+Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
 bool sendSensorReading()
 {
@@ -79,25 +83,31 @@ bool sendSensorReading()
     return true;
 }
 
-// Stub implementation – replace with real sensor later.
+void initSensor()
+{
+    logLine("Initializing SHT31 sensor...");
+    
+    if (!sht31.begin(0x44))  // Default I2C address is 0x44
+    {
+        logLine("ERROR: Could not find SHT31 sensor!");
+        logLine("Check wiring: SDA, SCL, VCC, GND");
+    }
+    else
+    {
+        logLine("SHT31 sensor initialized successfully.");
+    }
+}
+
 void readTemperatureAndHumidity(float& temperatureC, float& humidityPercent)
 {
-    // Simple plausible dummy values with slight drift so you can see changes.
-    static float baseTemp = 22.5f;
-    static float baseHum  = 40.0f;
+    temperatureC = sht31.readTemperature();
+    humidityPercent = sht31.readHumidity();
 
-    baseTemp += 0.05f;
-    if (baseTemp > 25.0f)
+    // Check if readings are valid
+    if (isnan(temperatureC) || isnan(humidityPercent))
     {
-        baseTemp = 22.5f;
+        logLine("ERROR: Failed to read from SHT31 sensor!");
+        temperatureC = 0.0f;
+        humidityPercent = 0.0f;
     }
-
-    baseHum += 0.10f;
-    if (baseHum > 45.0f)
-    {
-        baseHum = 40.0f;
-    }
-
-    temperatureC    = baseTemp;
-    humidityPercent = baseHum;
 }

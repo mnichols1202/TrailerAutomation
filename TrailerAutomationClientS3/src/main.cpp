@@ -20,6 +20,10 @@ void setup()
     delay(1000);
 
     logLine("TrailerAutomationClientS3 starting...");
+    
+    // Initialize SHT31 sensor
+    initSensor();
+    
     logLine("Initializing Wi-Fi...");
 
     // Initial Wi-Fi connect

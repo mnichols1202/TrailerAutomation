@@ -1,0 +1,43 @@
+# MicroPython / Pico specific
+*.pyc
+__pycache__/
+.pytest_cache/
+
+# User configuration (contains WiFi passwords)
+config.py
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Thonny IDE
+.thonny/
+
+# Test outputs
+test_results/
+*.log
+
+# Backup files
+*.bak
+*.backup
+*_backup.py
+
+# Temporary files
+*.tmp
+.tmp/
+
+# Documentation builds
+docs/_build/
+*.pdf
+*.epub
+
+# OS specific
+Thumbs.db
+desktop.ini
+
+# Keep example config
+!config.example.py

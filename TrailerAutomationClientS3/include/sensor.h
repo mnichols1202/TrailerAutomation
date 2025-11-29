@@ -1,8 +1,10 @@
 #pragma once
 
+// Initialize the SHT31 sensor
+void initSensor();
+
 // Send a temperature/humidity reading to /api/sensor-readings
 bool sendSensorReading();
 
-// Stub for reading temperature and humidity.
-// Replace this later with real SHT31 (or other) sensor code.
+// Read temperature and humidity from SHT31 sensor
 void readTemperatureAndHumidity(float& temperatureC, float& humidityPercent);
