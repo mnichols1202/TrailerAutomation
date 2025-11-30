@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.11222.15 d18.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrailerAutomationClientNet", "TrailerAutomationClientNet\TrailerAutomationClientNet.csproj", "{356984F1-0F30-DA44-A83B-1DBD6E6AF512}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrailerAutomationGateway", "TrailerAutomationGateway\TrailerAutomationGateway.csproj", "{B540F76E-1A64-0052-69D8-089780C1EA82}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "TrailerAutomationClientPico", "TrailerAutomationClientPico", "{69B0D76C-EC35-FA41-133F-66B54DD04069}"
+	ProjectSection(SolutionItems) = preProject
+		TrailerAutomationClientPico\main.py = TrailerAutomationClientPico\main.py
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "TrailerAutomationClientS3", "TrailerAutomationClientS3", "{23F42451-212E-5943-DAF8-EA68FB5F5D0F}"
+	ProjectSection(SolutionItems) = preProject
+		TrailerAutomationClientS3\src\config.h = TrailerAutomationClientS3\src\config.h
+		TrailerAutomationClientS3\src\main.cpp = TrailerAutomationClientS3\src\main.cpp
+		TrailerAutomationClientS3\platformio.ini = TrailerAutomationClientS3\platformio.ini
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{356984F1-0F30-DA44-A83B-1DBD6E6AF512}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{356984F1-0F30-DA44-A83B-1DBD6E6AF512}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{356984F1-0F30-DA44-A83B-1DBD6E6AF512}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{356984F1-0F30-DA44-A83B-1DBD6E6AF512}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B540F76E-1A64-0052-69D8-089780C1EA82}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B540F76E-1A64-0052-69D8-089780C1EA82}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B540F76E-1A64-0052-69D8-089780C1EA82}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B540F76E-1A64-0052-69D8-089780C1EA82}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
