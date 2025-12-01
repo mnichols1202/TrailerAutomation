@@ -1,0 +1,122 @@
+@page "/sensors"
+@rendermode InteractiveServer
+@inject SensorReadingRegistry Registry
+@inject SensorReadingRepository Repository
+@implements IDisposable
+
+<PageTitle>Sensor Readings</PageTitle>
+
+<div class="card">
+    <h2>📊 Current Sensor Readings</h2>
+    
+    @if (!_currentReadings.Any())
+    {
+        <p style="color: #7f8c8d; padding: 20px; text-align: center;">
+            No sensor readings available yet. Waiting for devices to report...
+        </p>
+    }
+    else
+    {
+        <div style="margin-bottom: 20px;">
+            <button class="refresh-btn" @onclick="LoadData">🔄 Refresh</button>
+            <span style="margin-left: 20px; color: #7f8c8d;">
+                Total readings in database: <strong>@_totalCount</strong>
+            </span>
+            <span style="margin-left: 20px; color: #7f8c8d;">
+                Last updated: <strong>@DateTime.Now.ToString("HH:mm:ss")</strong>
+            </span>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Client ID</th>
+                    <th>Temperature</th>
+                    <th>Humidity</th>
+                    <th>Last Updated</th>
+                    <th>Remote IP</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var reading in _currentReadings.OrderBy(r => r.ClientId))
+                {
+                    var minutesAgo = (DateTime.UtcNow - reading.TimestampUtc).TotalMinutes;
+                    var isRecent = minutesAgo < 5;
+                    
+                    <tr>
+                        <td>
+                            <strong>@reading.ClientId</strong>
+                            @if (isRecent)
+                            {
+                                <span class="status status-active">Active</span>
+                            }
+                            else
+                            {
+                                <span class="status status-inactive">Stale</span>
+                            }
+                        </td>
+                        <td>
+                            <span class="temp-reading">@reading.TemperatureC.ToString("F1")°C</span>
+                            <span style="color: #95a5a6;">(@((reading.TemperatureC * 9 / 5 + 32).ToString("F1"))°F)</span>
+                        </td>
+                        <td>
+                            <span class="humidity-reading">@reading.HumidityPercent.ToString("F1")%</span>
+                        </td>
+                        <td class="timestamp">
+                            @reading.TimestampUtc.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss")
+                            <br/>
+                            <small>(@minutesAgo.ToString("F0") min ago)</small>
+                        </td>
+                        <td style="color: #7f8c8d; font-size: 14px;">
+                            @(reading.RemoteIp ?? "unknown")
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<div class="card">
+    <h2>ℹ️ Information</h2>
+    <p style="color: #7f8c8d;">
+        This page displays the latest sensor readings from all connected devices.
+        The page automatically refreshes every 10 seconds.
+    </p>
+    <ul style="margin-top: 10px; margin-left: 20px; color: #7f8c8d;">
+        <li><strong>Active</strong> - Reading received within last 5 minutes</li>
+        <li><strong>Stale</strong> - No reading received for more than 5 minutes</li>
+    </ul>
+</div>
+
+@code {
+    private List<SensorReading> _currentReadings = new();
+    private int _totalCount;
+    private System.Threading.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        LoadData();
+        
+        // Auto-refresh every 10 seconds
+        _timer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                LoadData();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+    }
+
+    private void LoadData()
+    {
+        _currentReadings = Registry.GetAllReadings().ToList();
+        _totalCount = Repository.GetTotalCount();
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}

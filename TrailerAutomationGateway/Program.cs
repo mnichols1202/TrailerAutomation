@@ -9,7 +9,10 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{gatewayPort}");
 
 // Services
 builder.Services.AddSingleton<ClientRegistry>();
-builder.Services.AddSingleton<SensorReadingRegistry>();   // sensor registry
+builder.Services.AddSingleton<SensorReadingRepository>();  // LiteDB persistence
+builder.Services.AddSingleton<SensorReadingRegistry>();    // sensor registry
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -23,6 +26,10 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+// Middleware
+app.UseStaticFiles();
+app.UseAntiforgery();
+
 // Swagger UI
 if (app.Environment.IsDevelopment())
 {
@@ -34,8 +41,12 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// Redirect root to swagger
-app.MapGet("/", () => Results.Redirect("/swagger"))
+// Map Razor Components
+app.MapRazorComponents<TrailerAutomationGateway.Components.App>()
+    .AddInteractiveServerRenderMode();
+
+// Redirect root to sensor readings page
+app.MapGet("/", () => Results.Redirect("/sensors"))
    .ExcludeFromDescription();
 
 // Simple GET heartbeat for manual checks
@@ -159,6 +170,68 @@ app.MapGet("/api/sensor-readings/{clientId}", (string clientId, SensorReadingReg
     return reading is null ? Results.NotFound() : Results.Ok(reading);
 })
 .WithName("GetSensorReadingByClientId")
+.WithOpenApi();
+
+// Get historical sensor readings for a specific client
+app.MapGet("/api/sensor-readings/{clientId}/history", (
+    string clientId,
+    SensorReadingRepository repository,
+    DateTime? from = null,
+    DateTime? to = null,
+    int limit = 1000) =>
+{
+    // Limit to reasonable range
+    limit = Math.Clamp(limit, 1, 10000);
+
+    var readings = repository.GetHistory(clientId, from, to, limit);
+    var count = readings.Count();
+
+    Console.WriteLine(
+        $"[Sensor] GET /api/sensor-readings/{clientId}/history {DateTime.UtcNow:O} " +
+        $"From={from?.ToString("O") ?? "n/a"} To={to?.ToString("O") ?? "n/a"} " +
+        $"Limit={limit} Count={count}");
+
+    return Results.Ok(readings);
+})
+.WithName("GetSensorReadingHistory")
+.WithOpenApi();
+
+// Get all historical sensor readings (across all clients)
+app.MapGet("/api/sensor-readings/all/history", (
+    SensorReadingRepository repository,
+    DateTime? from = null,
+    DateTime? to = null,
+    int limit = 1000) =>
+{
+    // Limit to reasonable range
+    limit = Math.Clamp(limit, 1, 10000);
+
+    var readings = repository.GetAllHistory(from, to, limit);
+    var count = readings.Count();
+
+    Console.WriteLine(
+        $"[Sensor] GET /api/sensor-readings/all/history {DateTime.UtcNow:O} " +
+        $"From={from?.ToString("O") ?? "n/a"} To={to?.ToString("O") ?? "n/a"} " +
+        $"Limit={limit} Count={count}");
+
+    return Results.Ok(readings);
+})
+.WithName("GetAllSensorReadingHistory")
+.WithOpenApi();
+
+// Get database statistics
+app.MapGet("/api/sensor-readings/stats", (SensorReadingRepository repository) =>
+{
+    var totalCount = repository.GetTotalCount();
+    Console.WriteLine($"[Sensor] GET /api/sensor-readings/stats {DateTime.UtcNow:O} Total={totalCount}");
+
+    return Results.Ok(new
+    {
+        totalReadings = totalCount,
+        timestampUtc = DateTime.UtcNow
+    });
+})
+.WithName("GetSensorReadingStats")
 .WithOpenApi();
 
 // mDNS advertising

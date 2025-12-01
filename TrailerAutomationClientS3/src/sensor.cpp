@@ -30,10 +30,14 @@ bool sendSensorReading()
     String url = String("http://") + getGatewayHost() + ":" +
                  String(getGatewayPort()) + "/api/sensor-readings";
 
-    // Read temperature and humidity (stub for now)
+    // Read temperature and humidity from sensor
     float temperatureC   = 0.0f;
     float humidityPercent = 0.0f;
-    readTemperatureAndHumidity(temperatureC, humidityPercent);
+    if (!readTemperatureAndHumidity(temperatureC, humidityPercent))
+    {
+        logLine("Failed to read sensor, skipping send.");
+        return false;
+    }
 
     logLine(String("Sensor reading: TempC=") + String(temperatureC, 2) +
             " Humidity=" + String(humidityPercent, 2));
@@ -98,7 +102,7 @@ void initSensor()
     }
 }
 
-void readTemperatureAndHumidity(float& temperatureC, float& humidityPercent)
+bool readTemperatureAndHumidity(float& temperatureC, float& humidityPercent)
 {
     temperatureC = sht31.readTemperature();
     humidityPercent = sht31.readHumidity();
@@ -109,5 +113,7 @@ void readTemperatureAndHumidity(float& temperatureC, float& humidityPercent)
         logLine("ERROR: Failed to read from SHT31 sensor!");
         temperatureC = 0.0f;
         humidityPercent = 0.0f;
+        return false;
     }
+    return true;
 }

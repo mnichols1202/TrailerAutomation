@@ -7,4 +7,5 @@ void initSensor();
 bool sendSensorReading();
 
 // Read temperature and humidity from SHT31 sensor
-void readTemperatureAndHumidity(float& temperatureC, float& humidityPercent);
+// Returns true if successful, false if sensor read failed
+bool readTemperatureAndHumidity(float& temperatureC, float& humidityPercent);

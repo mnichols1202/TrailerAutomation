@@ -6,6 +6,9 @@
 // Ensure Wi-Fi is connected (tries to reconnect if needed)
 bool ensureWifiConnected();
 
+// Get the last WiFi error code (WL_* status)
+int getLastWifiError();
+
 // Start the mDNS responder (uses CLIENT_ID as hostname)
 bool startMdns();
 

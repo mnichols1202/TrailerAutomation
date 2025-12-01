@@ -1,12 +1,19 @@
 ﻿using System;
+using LiteDB;
 
 namespace TrailerAutomationGateway
 {
     /// <summary>
-    /// Represents the latest sensor reading from a client.
+    /// Represents a sensor reading from a client.
     /// </summary>
     public sealed class SensorReading
     {
+        /// <summary>
+        /// Auto-increment database ID.
+        /// </summary>
+        [BsonId(autoId: true)]
+        public int Id { get; set; }
+
         public string ClientId { get; set; } = string.Empty;
 
         /// <summary>

@@ -1,0 +1,36 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "name": "Launch Gateway",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-gateway",
+            "program": "${workspaceFolder}/TrailerAutomationGateway/bin/Debug/net9.0/TrailerAutomationGateway.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/TrailerAutomationGateway",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)",
+                "uriFormat": "%s/swagger"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            },
+            "console": "internalConsole"
+        },
+        {
+            "name": "Launch ClientNet",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-client",
+            "program": "${workspaceFolder}/TrailerAutomationClientNet/bin/Debug/net9.0/TrailerAutomationClientNet.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/TrailerAutomationClientNet",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        }
+    ]
+}
