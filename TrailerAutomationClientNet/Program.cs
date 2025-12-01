@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -8,19 +9,30 @@ namespace TrailerAutomationClientNet
 {
     internal class Program
     {
-        // Heartbeat interval (adjust as needed)
-        private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(10);
-
-        // How often to send SHT31 temperature/humidity readings
-        private static readonly TimeSpan SensorReportInterval = TimeSpan.FromSeconds(30);
+        private static AppConfiguration _config = null!;
 
         static async Task Main(string[] args)
         {
             Console.WriteLine("TrailerAutomationClientNet starting...");
+            Console.WriteLine();
+
+            // Load configuration
+            try
+            {
+                _config = ConfigurationLoader.Load();
+                ConfigurationLoader.PrintConfiguration(_config);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to load configuration: {ex.Message}");
+                return;
+            }
+
             Console.WriteLine("Discovering TrailerAutomationGateway via mDNS...");
 
             // Discover gateway using your GatewayDiscovery.cs
-            Uri? gatewayUri = await GatewayDiscovery.DiscoverAsync(TimeSpan.FromSeconds(8));
+            Uri? gatewayUri = await GatewayDiscovery.DiscoverAsync(
+                TimeSpan.FromSeconds(_config.Gateway.DiscoveryTimeoutSeconds));
 
             if (gatewayUri is null)
             {
@@ -36,20 +48,13 @@ namespace TrailerAutomationClientNet
                 Timeout = TimeSpan.FromSeconds(5)
             };
 
-            // Device identity (customize per device)
-            string clientId = Environment.MachineName;      // Pi hostname
-            string deviceType = "PiZero2W";
-            string friendlyName = "Zero2W-SensorNode";
-
-            Console.WriteLine($"ClientId: {clientId}");
-            Console.WriteLine($"DeviceType: {deviceType}");
-            Console.WriteLine($"FriendlyName: {friendlyName}");
-
             // Start background sensor reporting loop (independent of heartbeat)
             Console.WriteLine("Starting sensor loop...");
-            _ = Task.Run(() => SensorLoopAsync(http, clientId));
+            _ = Task.Run(() => SensorLoopAsync(http));
 
             Console.WriteLine("Starting heartbeat loop...");
+
+            var heartbeatInterval = TimeSpan.FromSeconds(_config.Intervals.HeartbeatSeconds);
 
             while (true)
             {
@@ -57,9 +62,9 @@ namespace TrailerAutomationClientNet
                 {
                     var hb = new
                     {
-                        ClientId = clientId,
-                        DeviceType = deviceType,
-                        FriendlyName = friendlyName
+                        ClientId = _config.Device.ClientId,
+                        DeviceType = _config.Device.DeviceType,
+                        FriendlyName = _config.Device.FriendlyName
                     };
 
                     string json = JsonSerializer.Serialize(hb);
@@ -76,12 +81,31 @@ namespace TrailerAutomationClientNet
                     Console.WriteLine($"[{DateTime.Now:T}] Heartbeat failed: {ex.Message}");
                 }
 
-                await Task.Delay(HeartbeatInterval);
+                await Task.Delay(heartbeatInterval);
             }
         }
 
-        private static async Task SensorLoopAsync(HttpClient http, string clientId)
+        private static async Task SensorLoopAsync(HttpClient http)
         {
+            var sensorReportInterval = TimeSpan.FromSeconds(_config.Intervals.SensorReadingSeconds);
+            
+            // Find enabled SHT31 sensors in configuration
+            var sht31Sensors = _config.Hardware.Sensors
+                .Where(s => s.Type.Equals("SHT31", StringComparison.OrdinalIgnoreCase) && s.Enabled)
+                .ToList();
+
+            if (sht31Sensors.Count == 0)
+            {
+                Console.WriteLine("[Sensor] No SHT31 sensors configured or enabled. Sensor loop will not run.");
+                return;
+            }
+
+            Console.WriteLine($"[Sensor] Found {sht31Sensors.Count} enabled SHT31 sensor(s):");
+            foreach (var sensor in sht31Sensors)
+            {
+                Console.WriteLine($"  - [{sensor.Id}] {sensor.Name} at I2C {sensor.I2cAddress}");
+            }
+
             try
             {
                 using var sensor = new Sht31Reader();
@@ -98,7 +122,7 @@ namespace TrailerAutomationClientNet
 
                         var payload = new
                         {
-                            ClientId = clientId,
+                            ClientId = _config.Device.ClientId,
                             TemperatureC = temperatureC,
                             HumidityPercent = humidityPercent
                         };
@@ -117,7 +141,7 @@ namespace TrailerAutomationClientNet
                         Console.WriteLine($"[{DateTime.Now:T}] Sensor loop error: {ex.Message}");
                     }
 
-                    await Task.Delay(SensorReportInterval);
+                    await Task.Delay(sensorReportInterval);
                 }
             }
             catch (Exception ex)

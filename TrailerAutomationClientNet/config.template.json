@@ -1,0 +1,40 @@
+{
+  "Device": {
+    "ClientId": "your-device-name",
+    "DeviceType": "PiZero2W",
+    "FriendlyName": "Your Friendly Device Name"
+  },
+  "Intervals": {
+    "HeartbeatSeconds": 10,
+    "SensorReadingSeconds": 30,
+    "CommandPollingSeconds": 3
+  },
+  "Gateway": {
+    "DiscoveryTimeoutSeconds": 8
+  },
+  "Hardware": {
+    "Relays": [
+      {
+        "Id": "relay1",
+        "Name": "Main Light",
+        "Pin": 17,
+        "InitialState": false
+      },
+      {
+        "Id": "relay2",
+        "Name": "Fan",
+        "Pin": 27,
+        "InitialState": false
+      }
+    ],
+    "Sensors": [
+      {
+        "Id": "sht31-main",
+        "Type": "SHT31",
+        "Name": "Temperature & Humidity",
+        "I2cAddress": "0x44",
+        "Enabled": true
+      }
+    ]
+  }
+}
