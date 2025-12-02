@@ -49,9 +49,19 @@ namespace TrailerAutomationClientNet
         private static void ValidateConfiguration(AppConfiguration config)
         {
             // Validate Device
+            if (string.IsNullOrWhiteSpace(config.Device.DeviceId))
+            {
+                throw new InvalidOperationException("Device.DeviceId cannot be empty.");
+            }
+
             if (string.IsNullOrWhiteSpace(config.Device.ClientId))
             {
                 throw new InvalidOperationException("Device.ClientId cannot be empty.");
+            }
+
+            if (config.Device.CommandListenerPort <= 0 || config.Device.CommandListenerPort > 65535)
+            {
+                throw new InvalidOperationException("Device.CommandListenerPort must be between 1 and 65535.");
             }
 
             // Validate Intervals
@@ -109,9 +119,11 @@ namespace TrailerAutomationClientNet
         {
             Console.WriteLine("=== Configuration ===");
             Console.WriteLine($"Device:");
+            Console.WriteLine($"  DeviceId: {config.Device.DeviceId}");
             Console.WriteLine($"  ClientId: {config.Device.ClientId}");
             Console.WriteLine($"  DeviceType: {config.Device.DeviceType}");
             Console.WriteLine($"  FriendlyName: {config.Device.FriendlyName}");
+            Console.WriteLine($"  Command Listener Port: {config.Device.CommandListenerPort}");
             Console.WriteLine();
 
             Console.WriteLine($"Intervals:");

@@ -48,6 +48,14 @@ namespace TrailerAutomationClientNet
                 Timeout = TimeSpan.FromSeconds(5)
             };
 
+            // Start TCP command listener
+            Console.WriteLine($"Starting command listener on port {_config.Device.CommandListenerPort}...");
+            var commandListener = new CommandListener(_config);
+            commandListener.Start();
+
+            // Register device with gateway
+            await RegisterDeviceAsync(http);
+
             // Start background sensor reporting loop (independent of heartbeat)
             Console.WriteLine("Starting sensor loop...");
             _ = Task.Run(() => SensorLoopAsync(http));
@@ -147,6 +155,71 @@ namespace TrailerAutomationClientNet
             catch (Exception ex)
             {
                 Console.WriteLine($"[{DateTime.Now:T}] Failed to initialize SHT31 sensor: {ex.Message}");
+            }
+        }
+
+        private static async Task RegisterDeviceAsync(HttpClient http)
+        {
+            try
+            {
+                Console.WriteLine("[DeviceRegistration] Registering with gateway...");
+
+                // Determine local IP address
+                string localIp = GetLocalIpAddress();
+
+                // Build capabilities list
+                var capabilities = new List<string>();
+                if (_config.Hardware.Relays.Count > 0)
+                {
+                    capabilities.Add("relay");
+                }
+                if (_config.Hardware.Sensors.Any(s => s.Enabled))
+                {
+                    capabilities.Add("temp");
+                    capabilities.Add("humidity");
+                }
+
+                var registration = new
+                {
+                    DeviceId = _config.Device.DeviceId,
+                    IpAddress = localIp,
+                    CommandPort = _config.Device.CommandListenerPort,
+                    Capabilities = capabilities.ToArray()
+                };
+
+                string json = JsonSerializer.Serialize(registration);
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await http.PostAsync("/api/devices/register", content);
+                response.EnsureSuccessStatusCode();
+
+                string respBody = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[DeviceRegistration] Success: {respBody}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[DeviceRegistration] Failed: {ex.Message}");
+                // Don't fail startup if registration fails - will retry on next heartbeat
+            }
+        }
+
+        private static string GetLocalIpAddress()
+        {
+            try
+            {
+                using var socket = new System.Net.Sockets.Socket(
+                    System.Net.Sockets.AddressFamily.InterNetwork,
+                    System.Net.Sockets.SocketType.Dgram,
+                    0);
+
+                // Connect to a public IP to determine local IP (doesn't actually send data)
+                socket.Connect("8.8.8.8", 65530);
+                var endPoint = socket.LocalEndPoint as System.Net.IPEndPoint;
+                return endPoint?.Address.ToString() ?? "127.0.0.1";
+            }
+            catch
+            {
+                return "127.0.0.1";
             }
         }
     }

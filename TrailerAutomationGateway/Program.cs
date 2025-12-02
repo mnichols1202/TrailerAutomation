@@ -11,6 +11,10 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{gatewayPort}");
 builder.Services.AddSingleton<ClientRegistry>();
 builder.Services.AddSingleton<SensorReadingRepository>();  // LiteDB persistence
 builder.Services.AddSingleton<SensorReadingRegistry>();    // sensor registry
+builder.Services.AddSingleton<DeviceRegistry>();           // device command registry
+builder.Services.AddScoped<DeviceCommandService>();        // device command service
+builder.Services.AddHttpClient();                          // HttpClient for Blazor components
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri($"http://localhost:{gatewayPort}") });
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddEndpointsApiExplorer();
@@ -112,6 +116,98 @@ app.MapGet("/api/clients/{clientId}", (string clientId, ClientRegistry registry)
     return client is null ? Results.NotFound() : Results.Ok(client);
 })
 .WithName("GetClientById")
+.WithOpenApi();
+
+// Register device for command routing
+app.MapPost("/api/devices/register", (DeviceRegistrationRequest request, DeviceRegistry deviceRegistry) =>
+{
+    try
+    {
+        deviceRegistry.RegisterDevice(
+            request.DeviceId,
+            request.IpAddress,
+            request.CommandPort,
+            request.Capabilities
+        );
+
+        Console.WriteLine(
+            $"[Device] POST /api/devices/register {DateTime.UtcNow:O} " +
+            $"DeviceId={request.DeviceId} " +
+            $"IP={request.IpAddress} " +
+            $"Port={request.CommandPort} " +
+            $"Capabilities=[{string.Join(", ", request.Capabilities ?? Array.Empty<string>())}]");
+
+        return Results.Ok(new
+        {
+            status = "OK",
+            deviceId = request.DeviceId,
+            timestampUtc = DateTime.UtcNow
+        });
+    }
+    catch (ArgumentException ex)
+    {
+        Console.WriteLine(
+            $"[Device] POST /api/devices/register {DateTime.UtcNow:O} " +
+            $"FAILED: {ex.Message}");
+
+        return Results.BadRequest(new
+        {
+            status = "ERROR",
+            message = ex.Message,
+            timestampUtc = DateTime.UtcNow
+        });
+    }
+})
+.WithName("RegisterDevice")
+.WithOpenApi();
+
+// Get all registered devices
+app.MapGet("/api/devices", (DeviceRegistry deviceRegistry) =>
+{
+    var devices = deviceRegistry.GetAllDevices();
+    Console.WriteLine($"[Device] GET /api/devices {DateTime.UtcNow:O} Count={devices.Count}");
+    return Results.Ok(devices);
+})
+.WithName("GetDevices")
+.WithOpenApi();
+
+// Get a single device by id
+app.MapGet("/api/devices/{deviceId}", (string deviceId, DeviceRegistry deviceRegistry) =>
+{
+    var device = deviceRegistry.GetDevice(deviceId);
+    Console.WriteLine(
+        $"[Device] GET /api/devices/{deviceId} {DateTime.UtcNow:O} " +
+        $"Found={(device != null)}");
+    return device is null ? Results.NotFound() : Results.Ok(device);
+})
+.WithName("GetDeviceById")
+.WithOpenApi();
+
+// Send setRelay command to a device
+app.MapPost("/api/devices/{deviceId}/commands/setRelay", async (
+    string deviceId,
+    SetRelayCommandRequest request,
+    DeviceCommandService commandService) =>
+{
+    Console.WriteLine(
+        $"[Device] POST /api/devices/{deviceId}/commands/setRelay {DateTime.UtcNow:O} " +
+        $"RelayId={request.RelayId} State={request.State}");
+
+    var result = await commandService.SendSetRelayCommandAsync(
+        deviceId,
+        request.RelayId,
+        request.State);
+
+    if (result.Success)
+    {
+        return Results.Ok(result);
+    }
+    else
+    {
+        return Results.BadRequest(result);
+    }
+})
+.WithName("SendSetRelayCommand")
 .WithOpenApi();
 
 // Receive temperature and humidity readings from a client

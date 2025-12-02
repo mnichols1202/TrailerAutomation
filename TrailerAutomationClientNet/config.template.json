@@ -1,8 +1,10 @@
 {
   "Device": {
+    "DeviceId": "your-device-name",
     "ClientId": "your-device-name",
     "DeviceType": "PiZero2W",
-    "FriendlyName": "Your Friendly Device Name"
+    "FriendlyName": "Your Friendly Device Name",
+    "CommandListenerPort": 8888
   },
   "Intervals": {
     "HeartbeatSeconds": 10,

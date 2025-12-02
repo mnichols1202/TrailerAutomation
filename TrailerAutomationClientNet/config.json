@@ -1,8 +1,10 @@
 {
   "Device": {
-    "ClientId": "pi-zero-001",
-    "DeviceType": "PiZero2W",
-    "FriendlyName": "Bedroom Sensor Node"
+    "DeviceId": "pi-3B-001",
+    "ClientId": "pi-3B-001",
+    "DeviceType": "RPi",
+    "FriendlyName": "Bedroom Sensor Node",
+    "CommandListenerPort": 8888
   },
   "Intervals": {
     "HeartbeatSeconds": 60,

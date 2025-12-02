@@ -1,0 +1,239 @@
+@page "/devices"
+@rendermode InteractiveServer
+@inject HttpClient Http
+@implements IDisposable
+
+<PageTitle>Device Control</PageTitle>
+
+<div class="card">
+    <h2>🎛️ Device Control</h2>
+    
+    <div style="margin-bottom: 20px;">
+        <button class="refresh-btn" @onclick="LoadDevices">🔄 Refresh</button>
+        <span style="margin-left: 20px; color: #7f8c8d;">
+            Last updated: <strong>@DateTime.Now.ToString("HH:mm:ss")</strong>
+        </span>
+    </div>
+    
+    @if (!_devices.Any())
+    {
+        <p style="color: #7f8c8d; padding: 20px; text-align: center;">
+            No devices registered yet. Waiting for devices to register...
+        </p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Device ID</th>
+                    <th>IP Address</th>
+                    <th>Command Port</th>
+                    <th>Capabilities</th>
+                    <th>Last Seen</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var device in _devices.OrderBy(d => d.DeviceId))
+                {
+                    var minutesAgo = (DateTime.UtcNow - device.LastSeen).TotalMinutes;
+                    var isOnline = minutesAgo < 5;
+                    
+                    <tr>
+                        <td>
+                            <strong>@device.DeviceId</strong>
+                            @if (isOnline)
+                            {
+                                <span class="status status-active">Online</span>
+                            }
+                            else
+                            {
+                                <span class="status status-inactive">Offline</span>
+                            }
+                        </td>
+                        <td style="color: #7f8c8d;">@device.IpAddress</td>
+                        <td style="color: #7f8c8d;">@device.CommandPort</td>
+                        <td>
+                            @foreach (var capability in device.Capabilities)
+                            {
+                                <span class="capability-tag">@capability</span>
+                            }
+                        </td>
+                        <td class="timestamp">
+                            @device.LastSeen.ToLocalTime().ToString("MMM dd HH:mm:ss")
+                            <br/>
+                            <small>(@minutesAgo.ToString("F0") min ago)</small>
+                        </td>
+                        <td>
+                            @if (device.Capabilities.Contains("relay"))
+                            {
+                                var deviceIdCopy = device.DeviceId;
+                                <button class="refresh-btn" style="margin-right: 5px;" 
+                                        @onclick="@(async () => await SetRelay(deviceIdCopy, "relay1", "on"))"
+                                        disabled="@(!isOnline)">
+                                    💡 Light ON
+                                </button>
+                                <button class="refresh-btn" style="margin-right: 5px;" 
+                                        @onclick="@(async () => await SetRelay(deviceIdCopy, "relay1", "off"))"
+                                        disabled="@(!isOnline)">
+                                    🌑 Light OFF
+                                </button>
+                                <button class="refresh-btn" 
+                                        @onclick="@(async () => await SetRelay(deviceIdCopy, "relay2", "on"))"
+                                        disabled="@(!isOnline)">
+                                    🌀 Fan ON
+                                </button>
+                                <button class="refresh-btn" 
+                                        @onclick="@(async () => await SetRelay(deviceIdCopy, "relay2", "off"))"
+                                        disabled="@(!isOnline)">
+                                    ⭕ Fan OFF
+                                </button>
+                            }
+                            else
+                            {
+                                <span style="color: #95a5a6;">No relay control</span>
+                            }
+                        </td>
+                    </tr>
+                    @if (_commandResults.ContainsKey(device.DeviceId))
+                    {
+                        var result = _commandResults[device.DeviceId];
+                        <tr>
+                            <td colspan="6" style="background: @(result.Success ? "#d4edda" : "#f8d7da"); 
+                                               padding: 10px; border-left: 4px solid @(result.Success ? "#28a745" : "#dc3545");">
+                                <strong>@(result.Success ? "✅" : "❌") Command Result:</strong> @result.Message
+                                @if (!string.IsNullOrEmpty(result.ErrorCode))
+                                {
+                                    <span style="color: #721c24;"> (Error: @result.ErrorCode)</span>
+                                }
+                                <button class="refresh-btn" style="float: right; padding: 5px 10px; font-size: 12px;" 
+                                        @onclick="() => ClearResult(device.DeviceId)">
+                                    ✖ Clear
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<div class="card">
+    <h2>ℹ️ Information</h2>
+    <p style="color: #7f8c8d;">
+        This page displays all registered devices and allows you to control relays.
+        The page automatically refreshes every 15 seconds.
+    </p>
+    <ul style="margin-top: 10px; margin-left: 20px; color: #7f8c8d;">
+        <li><strong>Online</strong> - Device seen within last 5 minutes</li>
+        <li><strong>Offline</strong> - Device not seen for more than 5 minutes</li>
+        <li>Buttons are disabled when device is offline</li>
+    </ul>
+</div>
+
+@code {
+    private List<DeviceInfo> _devices = new();
+    private Dictionary<string, CommandResult> _commandResults = new();
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDevices();
+        
+        // Auto-refresh every 15 seconds
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadDevices();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
+    }
+
+    private async Task LoadDevices()
+    {
+        try
+        {
+            var response = await Http.GetAsync("/api/devices");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                _devices = System.Text.Json.JsonSerializer.Deserialize<List<DeviceInfo>>(json,
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading devices: {ex.Message}");
+        }
+    }
+
+    private async Task SetRelay(string deviceId, string relayId, string state)
+    {
+        try
+        {
+            // Clear previous result for this device
+            _commandResults.Remove(deviceId);
+            
+            var request = new { RelayId = relayId, State = state };
+            var json = System.Text.Json.JsonSerializer.Serialize(request);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            
+            var response = await Http.PostAsync($"/api/devices/{deviceId}/commands/setRelay", content);
+            var responseJson = await response.Content.ReadAsStringAsync();
+            
+            var result = System.Text.Json.JsonSerializer.Deserialize<CommandResult>(responseJson,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            
+            if (result != null)
+            {
+                _commandResults[deviceId] = result;
+            }
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _commandResults[deviceId] = new CommandResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}",
+                ErrorCode = "CLIENT_ERROR"
+            };
+            StateHasChanged();
+        }
+    }
+
+    private void ClearResult(string deviceId)
+    {
+        _commandResults.Remove(deviceId);
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+
+    // Model classes for deserialization
+    private class DeviceInfo
+    {
+        public string DeviceId { get; set; } = string.Empty;
+        public string IpAddress { get; set; } = string.Empty;
+        public int CommandPort { get; set; }
+        public string[] Capabilities { get; set; } = Array.Empty<string>();
+        public DateTime LastSeen { get; set; }
+    }
+
+    private class CommandResult
+    {
+        public bool Success { get; set; }
+        public string? Message { get; set; }
+        public string? ErrorCode { get; set; }
+        public DateTime TimestampUtc { get; set; }
+        public object? Data { get; set; }
+    }
+}
