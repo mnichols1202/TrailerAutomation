@@ -25,6 +25,8 @@
         
         <button class="refresh-btn" style="margin-left: 20px;" @onclick="LoadData">🔄 Refresh</button>
         
+        <button class="refresh-btn btn-danger" style="margin-left: 20px;" @onclick="ResetData">🗑️ Reset All Data</button>
+        
         @if (_isLoading)
         {
             <span style="margin-left: 20px; color: #7f8c8d;">Loading...</span>
@@ -195,5 +197,24 @@
         var tempUnit = _useFahrenheit ? "°F" : "°C";
         
         await JS.InvokeVoidAsync("updateSensorChart", labels, tempData, humidityData, tempUnit);
+    }
+
+    private async Task ResetData()
+    {
+        var totalCount = Repository.GetTotalCount();
+        var confirmed = await JS.InvokeAsync<bool>("confirm", 
+            $"Are you sure you want to delete ALL {totalCount} sensor readings? This action cannot be undone!");
+        
+        if (confirmed)
+        {
+            var deletedCount = Repository.DeleteAll();
+            Console.WriteLine($"[History] Deleted {deletedCount} sensor readings");
+            
+            await LoadAvailableClients();
+            _readings = new List<SensorReading>();
+            _selectedClient = _availableClients.FirstOrDefault() ?? "";
+            CalculateStats();
+            StateHasChanged();
+        }
     }
 }

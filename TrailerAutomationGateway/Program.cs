@@ -234,6 +234,26 @@ app.MapGet("/api/sensor-readings/stats", (SensorReadingRepository repository) =>
 .WithName("GetSensorReadingStats")
 .WithOpenApi();
 
+// Delete all sensor readings (admin function)
+app.MapDelete("/api/sensor-readings/reset", (SensorReadingRepository repository) =>
+{
+    var count = repository.GetTotalCount();
+    var deletedCount = repository.DeleteAll();
+    
+    Console.WriteLine(
+        $"[Sensor] DELETE /api/sensor-readings/reset {DateTime.UtcNow:O} " +
+        $"Deleted={deletedCount} readings");
+
+    return Results.Ok(new
+    {
+        status = "OK",
+        deletedCount = deletedCount,
+        timestampUtc = DateTime.UtcNow
+    });
+})
+.WithName("ResetSensorReadings")
+.WithOpenApi();
+
 // mDNS advertising
 app.Lifetime.ApplicationStarted.Register(() =>
 {

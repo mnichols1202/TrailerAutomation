@@ -4,3 +4,4 @@ GET {{TrailerAutomationGateway_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+

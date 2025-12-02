@@ -122,6 +122,14 @@ tr:hover {
     background: #2980b9;
 }
 
+.refresh-btn.btn-danger {
+    background: #e74c3c;
+}
+
+.refresh-btn.btn-danger:hover {
+    background: #c0392b;
+}
+
 .timestamp {
     color: #7f8c8d;
     font-size: 14px;

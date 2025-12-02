@@ -139,6 +139,14 @@ namespace TrailerAutomationGateway
             return _readings.Count(x => x.ClientId == clientId);
         }
 
+        /// <summary>
+        /// Delete all sensor readings from the database.
+        /// </summary>
+        public int DeleteAll()
+        {
+            return _readings.DeleteAll();
+        }
+
         public void Dispose()
         {
             _db?.Dispose();
