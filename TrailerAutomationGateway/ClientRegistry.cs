@@ -5,7 +5,8 @@ using System.Linq;
 namespace TrailerAutomationGateway
 {
     /// <summary>
-    /// In-memory registry of active clients based on their heartbeat.
+    /// Unified in-memory registry for all clients/devices.
+    /// Handles both heartbeat tracking and command routing information.
     /// A client is removed after it misses a configurable number of heartbeat intervals.
     /// </summary>
     public class ClientRegistry
@@ -97,6 +98,78 @@ namespace TrailerAutomationGateway
             }
         }
 
+        /// <summary>
+        /// Register or update a client with command routing information.
+        /// </summary>
+        public void RegisterDevice(string clientId, string? deviceType, string? friendlyName, string? ipAddress, int commandPort, string[]? capabilities, RelayInfo[]? relays)
+        {
+            if (string.IsNullOrWhiteSpace(clientId))
+            {
+                throw new ArgumentException("ClientId is required.", nameof(clientId));
+            }
+
+            if (commandPort <= 0 || commandPort > 65535)
+            {
+                throw new ArgumentException("CommandPort must be between 1 and 65535.", nameof(commandPort));
+            }
+
+            lock (_sync)
+            {
+                var now = DateTime.UtcNow;
+
+                if (_clients.TryGetValue(clientId, out var info))
+                {
+                    // Update existing client with command routing info
+                    if (!string.IsNullOrWhiteSpace(deviceType))
+                    {
+                        info.DeviceType = deviceType;
+                    }
+                    if (!string.IsNullOrWhiteSpace(friendlyName))
+                    {
+                        info.FriendlyName = friendlyName;
+                    }
+                    if (!string.IsNullOrWhiteSpace(ipAddress))
+                    {
+                        info.RemoteIp = ipAddress;
+                    }
+                    info.CommandPort = commandPort;
+                    info.Capabilities = capabilities ?? Array.Empty<string>();
+                    info.Relays = relays;
+                    info.LastHeartbeatUtc = now;
+
+                    Console.WriteLine(
+                        $"[ClientRegistry][DEVICE_UPDATE] {clientId} " +
+                        $"IP={info.RemoteIp ?? "n/a"} " +
+                        $"Port={commandPort} " +
+                        $"Capabilities=[{string.Join(", ", capabilities ?? Array.Empty<string>())}]");
+                }
+                else
+                {
+                    // New client registered via device registration
+                    info = new ClientInfo
+                    {
+                        ClientId = clientId,
+                        DeviceType = deviceType,
+                        FriendlyName = friendlyName,
+                        RemoteIp = ipAddress,
+                        CommandPort = commandPort,
+                        Capabilities = capabilities ?? Array.Empty<string>(),
+                        Relays = relays,
+                        FirstSeenUtc = now,
+                        LastHeartbeatUtc = now
+                    };
+
+                    _clients[clientId] = info;
+
+                    Console.WriteLine(
+                        $"[ClientRegistry][DEVICE_NEW] {clientId} " +
+                        $"IP={ipAddress ?? "n/a"} " +
+                        $"Port={commandPort} " +
+                        $"Capabilities=[{string.Join(", ", capabilities ?? Array.Empty<string>())}]");
+                }
+            }
+        }
+
         private void RemoveStaleClients_NoLock(DateTime nowUtc)
         {
             var maxAge = TimeSpan.FromTicks(_heartbeatInterval.Ticks * _maxMissedHeartbeats);
@@ -151,6 +224,23 @@ namespace TrailerAutomationGateway
                 }
 
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Remove a client from the registry.
+        /// </summary>
+        public bool RemoveClient(string clientId)
+        {
+            lock (_sync)
+            {
+                if (_clients.Remove(clientId))
+                {
+                    Console.WriteLine($"[ClientRegistry][REMOVED] {clientId}");
+                    return true;
+                }
+
+                return false;
             }
         }
     }

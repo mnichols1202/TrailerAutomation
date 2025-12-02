@@ -34,13 +34,17 @@ namespace TrailerAutomationClientNet
             Uri? gatewayUri = await GatewayDiscovery.DiscoverAsync(
                 TimeSpan.FromSeconds(_config.Gateway.DiscoveryTimeoutSeconds));
 
+            // Fallback to localhost if discovery fails (for testing on same machine)
             if (gatewayUri is null)
             {
                 Console.WriteLine("Gateway discovery failed: No TrailerAutomationGateway found.");
-                return;
+                Console.WriteLine("Falling back to localhost:5000 for testing...");
+                gatewayUri = new Uri("http://localhost:5000");
             }
-
-            Console.WriteLine($"Discovered Gateway: {gatewayUri}");
+            else
+            {
+                Console.WriteLine($"Discovered Gateway: {gatewayUri}");
+            }
 
             using var http = new HttpClient
             {
@@ -48,52 +52,51 @@ namespace TrailerAutomationClientNet
                 Timeout = TimeSpan.FromSeconds(5)
             };
 
+            // Set up cancellation for graceful shutdown
+            using var cts = new System.Threading.CancellationTokenSource();
+            Console.CancelKeyPress += (sender, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+                Console.WriteLine("\nShutdown requested...");
+            };
+
+            // Initialize GPIO controller for relay control
+            Console.WriteLine("Initializing GPIO controller...");
+            using var gpioController = new GpioRelayController(_config);
+
             // Start TCP command listener
             Console.WriteLine($"Starting command listener on port {_config.Device.CommandListenerPort}...");
-            var commandListener = new CommandListener(_config);
-            commandListener.Start();
+            var commandListener = new CommandListener(_config, gpioController);
+            var listenerTask = Task.Run(() => commandListener.RunAsync(cts.Token), cts.Token);
 
-            // Register device with gateway
+            // Send initial heartbeat immediately to establish presence
+            Console.WriteLine("Sending initial heartbeat...");
+            await SendHeartbeatAsync(http);
+
+            // Register device with gateway (includes command port and capabilities)
             await RegisterDeviceAsync(http);
 
             // Start background sensor reporting loop (independent of heartbeat)
             Console.WriteLine("Starting sensor loop...");
-            _ = Task.Run(() => SensorLoopAsync(http));
+            _ = Task.Run(() => SensorLoopAsync(http, cts.Token), cts.Token);
 
             Console.WriteLine("Starting heartbeat loop...");
 
             var heartbeatInterval = TimeSpan.FromSeconds(_config.Intervals.HeartbeatSeconds);
 
-            while (true)
+            while (!cts.Token.IsCancellationRequested)
             {
-                try
-                {
-                    var hb = new
-                    {
-                        ClientId = _config.Device.ClientId,
-                        DeviceType = _config.Device.DeviceType,
-                        FriendlyName = _config.Device.FriendlyName
-                    };
+                await Task.Delay(heartbeatInterval, cts.Token);
 
-                    string json = JsonSerializer.Serialize(hb);
-                    using var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                    var response = await http.PostAsync("/api/heartbeat", content);
-                    response.EnsureSuccessStatusCode();
-
-                    string respBody = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"[{DateTime.Now:T}] Heartbeat OK: {respBody}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[{DateTime.Now:T}] Heartbeat failed: {ex.Message}");
-                }
-
-                await Task.Delay(heartbeatInterval);
+                await SendHeartbeatAsync(http);
             }
+            
+            Console.WriteLine("Shutting down gracefully...");
+            await listenerTask;
         }
 
-        private static async Task SensorLoopAsync(HttpClient http)
+        private static async Task SensorLoopAsync(HttpClient http, System.Threading.CancellationToken cancellationToken)
         {
             var sensorReportInterval = TimeSpan.FromSeconds(_config.Intervals.SensorReadingSeconds);
             
@@ -118,7 +121,7 @@ namespace TrailerAutomationClientNet
             {
                 using var sensor = new Sht31Reader();
 
-                while (true)
+                while (!cancellationToken.IsCancellationRequested)
                 {
                     try
                     {
@@ -149,12 +152,38 @@ namespace TrailerAutomationClientNet
                         Console.WriteLine($"[{DateTime.Now:T}] Sensor loop error: {ex.Message}");
                     }
 
-                    await Task.Delay(sensorReportInterval);
+                    await Task.Delay(sensorReportInterval, cancellationToken);
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[{DateTime.Now:T}] Failed to initialize SHT31 sensor: {ex.Message}");
+            }
+        }
+
+        private static async Task SendHeartbeatAsync(HttpClient http)
+        {
+            try
+            {
+                var hb = new
+                {
+                    ClientId = _config.Device.ClientId,
+                    DeviceType = _config.Device.DeviceType,
+                    FriendlyName = _config.Device.FriendlyName
+                };
+
+                string json = JsonSerializer.Serialize(hb);
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await http.PostAsync("/api/heartbeat", content);
+                response.EnsureSuccessStatusCode();
+
+                string respBody = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[{DateTime.Now:T}] Heartbeat OK: {respBody}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[{DateTime.Now:T}] Heartbeat failed: {ex.Message}");
             }
         }
 
@@ -179,12 +208,20 @@ namespace TrailerAutomationClientNet
                     capabilities.Add("humidity");
                 }
 
+                // Build relay info list (Id and Name only for UI)
+                var relays = _config.Hardware.Relays
+                    .Select(r => new { Id = r.Id, Name = r.Name })
+                    .ToArray();
+
                 var registration = new
                 {
                     DeviceId = _config.Device.DeviceId,
+                    DeviceType = _config.Device.DeviceType,
+                    FriendlyName = _config.Device.FriendlyName,
                     IpAddress = localIp,
                     CommandPort = _config.Device.CommandListenerPort,
-                    Capabilities = capabilities.ToArray()
+                    Capabilities = capabilities.ToArray(),
+                    Relays = relays
                 };
 
                 string json = JsonSerializer.Serialize(registration);
@@ -207,12 +244,32 @@ namespace TrailerAutomationClientNet
         {
             try
             {
+                // Try NetworkInterface approach first (works better on Linux)
+                var interfaces = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces();
+                foreach (var netInterface in interfaces)
+                {
+                    // Skip loopback and non-operational interfaces
+                    if (netInterface.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up ||
+                        netInterface.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                        continue;
+
+                    var props = netInterface.GetIPProperties();
+                    foreach (var addr in props.UnicastAddresses)
+                    {
+                        // Return first IPv4 address that's not loopback
+                        if (addr.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
+                            !System.Net.IPAddress.IsLoopback(addr.Address))
+                        {
+                            return addr.Address.ToString();
+                        }
+                    }
+                }
+
+                // Fallback: socket trick
                 using var socket = new System.Net.Sockets.Socket(
                     System.Net.Sockets.AddressFamily.InterNetwork,
                     System.Net.Sockets.SocketType.Dgram,
                     0);
-
-                // Connect to a public IP to determine local IP (doesn't actually send data)
                 socket.Connect("8.8.8.8", 65530);
                 var endPoint = socket.LocalEndPoint as System.Net.IPEndPoint;
                 return endPoint?.Address.ToString() ?? "127.0.0.1";

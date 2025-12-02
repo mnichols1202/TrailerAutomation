@@ -15,35 +15,19 @@ namespace TrailerAutomationClientNet
     public class CommandListener
     {
         private readonly AppConfiguration _config;
+        private readonly GpioRelayController _gpioController;
         private TcpListener? _listener;
-        private CancellationTokenSource? _cts;
 
-        public CommandListener(AppConfiguration config)
+        public CommandListener(AppConfiguration config, GpioRelayController gpioController)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
+            _gpioController = gpioController ?? throw new ArgumentNullException(nameof(gpioController));
         }
 
         /// <summary>
-        /// Start the TCP listener in the background.
+        /// Run the TCP listener (async cancellable).
         /// </summary>
-        public void Start()
-        {
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
-
-            Task.Run(async () => await RunListenerAsync(token), token);
-        }
-
-        /// <summary>
-        /// Stop the TCP listener.
-        /// </summary>
-        public void Stop()
-        {
-            _cts?.Cancel();
-            _listener?.Stop();
-        }
-
-        private async Task RunListenerAsync(CancellationToken cancellationToken)
+        public async Task RunAsync(CancellationToken cancellationToken)
         {
             try
             {
@@ -196,9 +180,22 @@ namespace TrailerAutomationClientNet
 
                 Console.WriteLine($"[CommandListener] SetRelay: {relayId} -> {state} (Pin: {relay.Pin})");
 
-                // TODO: Actual GPIO control would go here
-                // For now, simulate the operation
-                await Task.Delay(50); // Simulate relay operation time
+                // Control GPIO pin
+                bool success = _gpioController.SetRelay(relayId, state);
+
+                if (!success)
+                {
+                    return new
+                    {
+                        commandId = commandId,
+                        success = false,
+                        message = $"Failed to set relay '{relayId}' to {state}",
+                        errorCode = "GPIO_ERROR"
+                    };
+                }
+
+                // Get current state after setting
+                var currentState = _gpioController.GetRelayState(relayId);
 
                 return new
                 {
@@ -208,7 +205,7 @@ namespace TrailerAutomationClientNet
                     data = new
                     {
                         relayId = relayId,
-                        state = state,
+                        state = currentState ?? state,
                         pin = relay.Pin
                     }
                 };

@@ -8,42 +8,37 @@ using System.Threading.Tasks;
 namespace TrailerAutomationGateway
 {
     /// <summary>
-    /// Service for sending TCP commands to client devices.
+    /// Service for sending TCP commands to client devices using line-delimited JSON protocol.
     /// </summary>
     public class DeviceCommandService
     {
-        private readonly DeviceRegistry _deviceRegistry;
-        private readonly TimeSpan _connectionTimeout = TimeSpan.FromSeconds(5);
-        private readonly TimeSpan _responseTimeout = TimeSpan.FromSeconds(10);
+        private readonly ClientRegistry _clientRegistry;
+        private const int ConnectionTimeoutMs = 5000;
+        private const int ResponseTimeoutMs = 5000;
 
-        public DeviceCommandService(DeviceRegistry deviceRegistry)
+        public DeviceCommandService(ClientRegistry clientRegistry)
         {
-            _deviceRegistry = deviceRegistry ?? throw new ArgumentNullException(nameof(deviceRegistry));
+            _clientRegistry = clientRegistry ?? throw new ArgumentNullException(nameof(clientRegistry));
         }
 
         /// <summary>
-        /// Send a relay control command to a device.
+        /// Send a generic command to a device.
         /// </summary>
-        public async Task<CommandResult> SendSetRelayCommandAsync(string deviceId, string relayId, string state)
+        public async Task<CommandResult> SendCommandAsync(string deviceId, DeviceCommand command)
         {
             if (string.IsNullOrWhiteSpace(deviceId))
             {
                 return CommandResult.ErrorResult("DeviceId is required", "INVALID_DEVICE_ID");
             }
 
-            if (string.IsNullOrWhiteSpace(relayId))
+            if (command == null)
             {
-                return CommandResult.ErrorResult("RelayId is required", "INVALID_RELAY_ID");
-            }
-
-            if (string.IsNullOrWhiteSpace(state))
-            {
-                return CommandResult.ErrorResult("State is required", "INVALID_STATE");
+                return CommandResult.ErrorResult("Command is required", "INVALID_COMMAND");
             }
 
             // Resolve device from registry
-            var device = _deviceRegistry.GetDevice(deviceId);
-            if (device == null)
+            var client = _clientRegistry.GetClient(deviceId);
+            if (client == null)
             {
                 Console.WriteLine($"[DeviceCommand] Device not found: {deviceId}");
                 return CommandResult.ErrorResult(
@@ -51,38 +46,45 @@ namespace TrailerAutomationGateway
                     "DEVICE_NOT_FOUND");
             }
 
-            Console.WriteLine(
-                $"[DeviceCommand] Sending setRelay command to {deviceId} " +
-                $"({device.IpAddress}:{device.CommandPort}) " +
-                $"RelayId={relayId} State={state}");
-
-            // Generate unique command ID
-            var commandId = Guid.NewGuid().ToString();
-
-            // Build command object
-            var command = new
+            if (string.IsNullOrWhiteSpace(client.RemoteIp))
             {
-                commandId = commandId,
-                type = "setRelay",
-                payload = new
-                {
-                    relayId = relayId,
-                    state = state
-                }
-            };
+                Console.WriteLine($"[DeviceCommand] Device has no IP address: {deviceId}");
+                return CommandResult.ErrorResult(
+                    $"Device '{deviceId}' has no IP address",
+                    "NO_IP_ADDRESS");
+            }
+
+            if (client.CommandPort <= 0)
+            {
+                Console.WriteLine($"[DeviceCommand] Device has no command port: {deviceId}");
+                return CommandResult.ErrorResult(
+                    $"Device '{deviceId}' has no command port configured",
+                    "NO_COMMAND_PORT");
+            }
+
+            Console.WriteLine(
+                $"[DeviceCommand] Sending {command.Type} command to {deviceId} " +
+                $"({client.RemoteIp}:{client.CommandPort}) " +
+                $"CommandId={command.CommandId}");
 
             try
             {
                 // Serialize command to JSON
-                string commandJson = JsonSerializer.Serialize(command);
-
-                // Open TCP connection
-                using var client = new TcpClient();
-                var connectTask = client.ConnectAsync(device.IpAddress, device.CommandPort);
-                
-                if (await Task.WhenAny(connectTask, Task.Delay(_connectionTimeout)) != connectTask)
+                string commandJson = JsonSerializer.Serialize(command, new JsonSerializerOptions
                 {
-                    Console.WriteLine($"[DeviceCommand] Connection timeout to {device.IpAddress}:{device.CommandPort}");
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+
+                // Open TCP connection with timeout
+                using var tcpClient = new TcpClient();
+                tcpClient.SendTimeout = ConnectionTimeoutMs;
+                tcpClient.ReceiveTimeout = ResponseTimeoutMs;
+
+                var connectTask = tcpClient.ConnectAsync(client.RemoteIp, client.CommandPort);
+                
+                if (await Task.WhenAny(connectTask, Task.Delay(ConnectionTimeoutMs)) != connectTask)
+                {
+                    Console.WriteLine($"[DeviceCommand] Connection timeout to {client.RemoteIp}:{client.CommandPort}");
                     return CommandResult.ErrorResult(
                         $"Connection timeout to device {deviceId}",
                         "CONNECTION_TIMEOUT");
@@ -90,19 +92,20 @@ namespace TrailerAutomationGateway
 
                 await connectTask; // Propagate any exceptions
 
-                Console.WriteLine($"[DeviceCommand] Connected to {device.IpAddress}:{device.CommandPort}");
+                Console.WriteLine($"[DeviceCommand] Connected to {client.RemoteIp}:{client.CommandPort}");
 
-                using var stream = client.GetStream();
-                using var writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
+                await using var stream = tcpClient.GetStream();
+                await using var writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
                 using var reader = new StreamReader(stream, Encoding.UTF8);
 
                 // Send command (JSON + newline)
                 await writer.WriteLineAsync(commandJson);
+                await writer.FlushAsync();
                 Console.WriteLine($"[DeviceCommand] Sent: {commandJson}");
 
                 // Read response with timeout
                 var readTask = reader.ReadLineAsync();
-                if (await Task.WhenAny(readTask, Task.Delay(_responseTimeout)) != readTask)
+                if (await Task.WhenAny(readTask, Task.Delay(ResponseTimeoutMs)) != readTask)
                 {
                     Console.WriteLine($"[DeviceCommand] Response timeout from {deviceId}");
                     return CommandResult.ErrorResult(
@@ -175,6 +178,39 @@ namespace TrailerAutomationGateway
                     $"Unexpected error: {ex.Message}",
                     "UNKNOWN_ERROR");
             }
+        }
+
+        /// <summary>
+        /// Convenience method to send a relay control command.
+        /// </summary>
+        public async Task<CommandResult> SendSetRelayCommandAsync(string deviceId, string relayId, string state)
+        {
+            if (string.IsNullOrWhiteSpace(relayId))
+            {
+                return CommandResult.ErrorResult("RelayId is required", "INVALID_RELAY_ID");
+            }
+
+            if (string.IsNullOrWhiteSpace(state))
+            {
+                return CommandResult.ErrorResult("State is required", "INVALID_STATE");
+            }
+
+            // Build command using generic model
+            var command = new DeviceCommand
+            {
+                CommandId = Guid.NewGuid().ToString(),
+                Type = "setRelay",
+                Payload = JsonSerializer.SerializeToElement(new SetRelayPayload
+                {
+                    RelayId = relayId,
+                    State = state
+                }, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                })
+            };
+
+            return await SendCommandAsync(deviceId, command);
         }
     }
 }

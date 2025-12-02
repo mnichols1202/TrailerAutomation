@@ -8,10 +8,10 @@ const int gatewayPort = 5000;
 builder.WebHost.UseUrls($"http://0.0.0.0:{gatewayPort}");
 
 // Services
-builder.Services.AddSingleton<ClientRegistry>();
+// ClientRegistry with 60-second heartbeat tolerance (clients send every 60s, allow 3 missed = 180s timeout)
+builder.Services.AddSingleton(new ClientRegistry(TimeSpan.FromSeconds(60), maxMissedHeartbeats: 3));
 builder.Services.AddSingleton<SensorReadingRepository>();  // LiteDB persistence
 builder.Services.AddSingleton<SensorReadingRegistry>();    // sensor registry
-builder.Services.AddSingleton<DeviceRegistry>();           // device command registry
 builder.Services.AddScoped<DeviceCommandService>();        // device command service
 builder.Services.AddHttpClient();                          // HttpClient for Blazor components
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri($"http://localhost:{gatewayPort}") });
@@ -119,15 +119,18 @@ app.MapGet("/api/clients/{clientId}", (string clientId, ClientRegistry registry)
 .WithOpenApi();
 
 // Register device for command routing
-app.MapPost("/api/devices/register", (DeviceRegistrationRequest request, DeviceRegistry deviceRegistry) =>
+app.MapPost("/api/devices/register", (DeviceRegistrationRequest request, ClientRegistry clientRegistry) =>
 {
     try
     {
-        deviceRegistry.RegisterDevice(
+        clientRegistry.RegisterDevice(
             request.DeviceId,
+            request.DeviceType,
+            request.FriendlyName,
             request.IpAddress,
             request.CommandPort,
-            request.Capabilities
+            request.Capabilities,
+            request.Relays
         );
 
         Console.WriteLine(
@@ -162,23 +165,23 @@ app.MapPost("/api/devices/register", (DeviceRegistrationRequest request, DeviceR
 .WithOpenApi();
 
 // Get all registered devices
-app.MapGet("/api/devices", (DeviceRegistry deviceRegistry) =>
+app.MapGet("/api/devices", (ClientRegistry clientRegistry) =>
 {
-    var devices = deviceRegistry.GetAllDevices();
-    Console.WriteLine($"[Device] GET /api/devices {DateTime.UtcNow:O} Count={devices.Count}");
-    return Results.Ok(devices);
+    var clients = clientRegistry.GetAllClients();
+    Console.WriteLine($"[Device] GET /api/devices {DateTime.UtcNow:O} Count={clients.Count}");
+    return Results.Ok(clients);
 })
 .WithName("GetDevices")
 .WithOpenApi();
 
 // Get a single device by id
-app.MapGet("/api/devices/{deviceId}", (string deviceId, DeviceRegistry deviceRegistry) =>
+app.MapGet("/api/devices/{deviceId}", (string deviceId, ClientRegistry clientRegistry) =>
 {
-    var device = deviceRegistry.GetDevice(deviceId);
+    var client = clientRegistry.GetClient(deviceId);
     Console.WriteLine(
         $"[Device] GET /api/devices/{deviceId} {DateTime.UtcNow:O} " +
-        $"Found={(device != null)}");
-    return device is null ? Results.NotFound() : Results.Ok(device);
+        $"Found={(client != null)}");
+    return client is null ? Results.NotFound() : Results.Ok(client);
 })
 .WithName("GetDeviceById")
 .WithOpenApi();

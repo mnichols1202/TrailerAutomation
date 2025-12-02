@@ -66,29 +66,29 @@
                             <small>(@minutesAgo.ToString("F0") min ago)</small>
                         </td>
                         <td>
-                            @if (device.Capabilities.Contains("relay"))
+                            @if (device.Capabilities.Contains("relay") && device.Relays != null && device.Relays.Length > 0)
                             {
                                 var deviceIdCopy = device.DeviceId;
-                                <button class="refresh-btn" style="margin-right: 5px;" 
-                                        @onclick="@(async () => await SetRelay(deviceIdCopy, "relay1", "on"))"
-                                        disabled="@(!isOnline)">
-                                    💡 Light ON
-                                </button>
-                                <button class="refresh-btn" style="margin-right: 5px;" 
-                                        @onclick="@(async () => await SetRelay(deviceIdCopy, "relay1", "off"))"
-                                        disabled="@(!isOnline)">
-                                    🌑 Light OFF
-                                </button>
-                                <button class="refresh-btn" 
-                                        @onclick="@(async () => await SetRelay(deviceIdCopy, "relay2", "on"))"
-                                        disabled="@(!isOnline)">
-                                    🌀 Fan ON
-                                </button>
-                                <button class="refresh-btn" 
-                                        @onclick="@(async () => await SetRelay(deviceIdCopy, "relay2", "off"))"
-                                        disabled="@(!isOnline)">
-                                    ⭕ Fan OFF
-                                </button>
+                                @foreach (var relay in device.Relays)
+                                {
+                                    var relayIdCopy = relay.Id;
+                                    var relayNameCopy = relay.Name;
+                                    <button class="refresh-btn" style="margin-right: 5px;" 
+                                            @onclick="@(async () => await SetRelay(deviceIdCopy, relayIdCopy, "on"))"
+                                            disabled="@(!isOnline)">
+                                        ⚡ @relayNameCopy ON
+                                    </button>
+                                    <button class="refresh-btn" style="margin-right: 5px;" 
+                                            @onclick="@(async () => await SetRelay(deviceIdCopy, relayIdCopy, "off"))"
+                                            disabled="@(!isOnline)">
+                                        ⭕ @relayNameCopy OFF
+                                    </button>
+                                    <br style="margin-bottom: 5px;" />
+                                }
+                            }
+                            else if (device.Capabilities.Contains("relay"))
+                            {
+                                <span style="color: #95a5a6;">Relay control (no relay info)</span>
                             }
                             else
                             {
@@ -218,22 +218,28 @@
         _timer?.Dispose();
     }
 
-    // Model classes for deserialization
+    // Model class for deserialization - matches ClientInfo fields we need
     private class DeviceInfo
     {
-        public string DeviceId { get; set; } = string.Empty;
-        public string IpAddress { get; set; } = string.Empty;
+        public string ClientId { get; set; } = string.Empty;
+        public string DeviceType { get; set; } = string.Empty;
+        public string? FriendlyName { get; set; }
+        public string? RemoteIp { get; set; }
+        public DateTime FirstSeenUtc { get; set; }
+        public DateTime LastHeartbeatUtc { get; set; }
         public int CommandPort { get; set; }
         public string[] Capabilities { get; set; } = Array.Empty<string>();
-        public DateTime LastSeen { get; set; }
+        public RelayInfo[]? Relays { get; set; }
+        
+        // Properties for backwards compatibility with existing code
+        public string DeviceId => ClientId;
+        public string IpAddress => RemoteIp ?? "unknown";
+        public DateTime LastSeen => LastHeartbeatUtc;
     }
 
-    private class CommandResult
+    private class RelayInfo
     {
-        public bool Success { get; set; }
-        public string? Message { get; set; }
-        public string? ErrorCode { get; set; }
-        public DateTime TimestampUtc { get; set; }
-        public object? Data { get; set; }
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
     }
 }

@@ -18,13 +18,13 @@
     "Relays": [
       {
         "Id": "relay1",
-        "Name": "Main Light",
+        "Name": "LED 1",
         "Pin": 17,
         "InitialState": false
       },
       {
         "Id": "relay2",
-        "Name": "Fan",
+        "Name": "LED 2",
         "Pin": 27,
         "InitialState": false
       }
