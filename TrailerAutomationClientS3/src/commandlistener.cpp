@@ -18,6 +18,17 @@ bool initCommandListener()
     
     const DeviceConfig& config = getDeviceConfig();
     
+    // Stop existing listener if running (for re-initialization)
+    if (g_listenerInitialized && g_commandServer)
+    {
+        logLine("Stopping existing command listener for re-initialization...");
+        g_commandServer->stop();
+        delete g_commandServer;
+        g_commandServer = nullptr;
+        g_listenerInitialized = false;
+        delay(100);  // Brief delay for port to be released
+    }
+    
     logLine("Starting TCP command listener on port " + String(config.commandListenerPort) + "...");
     
     // Create and start server
