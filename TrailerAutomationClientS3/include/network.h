@@ -20,3 +20,6 @@ bool isGatewayKnown();
 void forgetGateway();
 String getGatewayHost();
 uint16_t getGatewayPort();
+
+// Register device with gateway (includes relay config and command port)
+bool registerDevice();

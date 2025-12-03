@@ -1,6 +1,7 @@
 @page "/devices"
 @rendermode InteractiveServer
-@inject HttpClient Http
+@inject ClientRegistry ClientRegistry
+@inject DeviceCommandService CommandService
 @implements IDisposable
 
 <PageTitle>Device Control</PageTitle>
@@ -73,15 +74,13 @@
                                 {
                                     var relayIdCopy = relay.Id;
                                     var relayNameCopy = relay.Name;
-                                    <button class="refresh-btn" style="margin-right: 5px;" 
-                                            @onclick="@(async () => await SetRelay(deviceIdCopy, relayIdCopy, "on"))"
+                                    var relayStateKey = $"{deviceIdCopy}_{relayIdCopy}";
+                                    var isOn = _relayStates.GetValueOrDefault(relayStateKey, false);
+                                    <button class="refresh-btn" 
+                                            style="margin-right: 5px; background: @(isOn ? "#28a745" : "#6c757d"); color: white;" 
+                                            @onclick="@(async () => await ToggleRelay(deviceIdCopy, relayIdCopy, relayNameCopy))"
                                             disabled="@(!isOnline)">
-                                        ⚡ @relayNameCopy ON
-                                    </button>
-                                    <button class="refresh-btn" style="margin-right: 5px;" 
-                                            @onclick="@(async () => await SetRelay(deviceIdCopy, relayIdCopy, "off"))"
-                                            disabled="@(!isOnline)">
-                                        ⭕ @relayNameCopy OFF
+                                        @(isOn ? "⚡" : "⭕") @relayNameCopy @(isOn ? "ON" : "OFF")
                                     </button>
                                     <br style="margin-bottom: 5px;" />
                                 }
@@ -136,6 +135,7 @@
 @code {
     private List<DeviceInfo> _devices = new();
     private Dictionary<string, CommandResult> _commandResults = new();
+    private Dictionary<string, bool> _relayStates = new();
     private System.Threading.Timer? _timer;
 
     protected override async Task OnInitializedAsync()
@@ -153,44 +153,55 @@
         }, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
     }
 
-    private async Task LoadDevices()
+    private Task LoadDevices()
     {
         try
         {
-            var response = await Http.GetAsync("/api/devices");
-            if (response.IsSuccessStatusCode)
+            var clients = ClientRegistry.GetAllClients();
+            _devices = clients.Select(c => new DeviceInfo
             {
-                var json = await response.Content.ReadAsStringAsync();
-                _devices = System.Text.Json.JsonSerializer.Deserialize<List<DeviceInfo>>(json,
-                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
-            }
+                ClientId = c.ClientId,
+                DeviceType = c.DeviceType ?? "Unknown",
+                FriendlyName = c.FriendlyName,
+                RemoteIp = c.RemoteIp,
+                FirstSeenUtc = c.FirstSeenUtc,
+                LastHeartbeatUtc = c.LastHeartbeatUtc,
+                CommandPort = c.CommandPort,
+                Capabilities = c.Capabilities?.ToArray() ?? Array.Empty<string>(),
+                Relays = c.Relays?.Select(r => new RelayInfo { Id = r.Id, Name = r.Name }).ToArray()
+            }).ToList();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading devices: {ex.Message}");
         }
+        
+        return Task.CompletedTask;
     }
-
-    private async Task SetRelay(string deviceId, string relayId, string state)
+    
+    private async Task ToggleRelay(string deviceId, string relayId, string relayName)
     {
         try
         {
+            var relayStateKey = $"{deviceId}_{relayId}";
+            var currentState = _relayStates.GetValueOrDefault(relayStateKey, false);
+            var newState = !currentState;
+            var stateStr = newState ? "on" : "off";
+            
             // Clear previous result for this device
             _commandResults.Remove(deviceId);
             
-            var request = new { RelayId = relayId, State = state };
-            var json = System.Text.Json.JsonSerializer.Serialize(request);
-            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-            
-            var response = await Http.PostAsync($"/api/devices/{deviceId}/commands/setRelay", content);
-            var responseJson = await response.Content.ReadAsStringAsync();
-            
-            var result = System.Text.Json.JsonSerializer.Deserialize<CommandResult>(responseJson,
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var result = await CommandService.SendSetRelayCommandAsync(deviceId, relayId, stateStr);
             
             if (result != null)
             {
                 _commandResults[deviceId] = result;
+                
+                // Update state only if successful
+                if (result.Success)
+                {
+                    _relayStates[relayStateKey] = newState;
+                }
             }
             
             StateHasChanged();
@@ -222,7 +233,7 @@
     private class DeviceInfo
     {
         public string ClientId { get; set; } = string.Empty;
-        public string DeviceType { get; set; } = string.Empty;
+        public string? DeviceType { get; set; }
         public string? FriendlyName { get; set; }
         public string? RemoteIp { get; set; }
         public DateTime FirstSeenUtc { get; set; }

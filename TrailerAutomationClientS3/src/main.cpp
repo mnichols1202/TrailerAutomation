@@ -7,16 +7,20 @@
 #include "sensor.h"
 #include "rgbled.h"
 #include "power.h"
+#include "sdconfig.h"
+#include "relaycontrol.h"
+#include "commandlistener.h"
 
 // Timers for periodic tasks
 static unsigned long g_lastHeartbeatMs = 0;
 static unsigned long g_lastSensorMs    = 0;
 static unsigned long g_bootDelayStartMs = 0;
 static bool g_bootDelayComplete = false;
+static bool g_deviceRegistered = false;
 
-// Sensor report interval (milliseconds)
-// Separate from HEARTBEAT_INTERVAL_MS which comes from config.h
-static const unsigned long SENSOR_INTERVAL_MS = 30UL * 1000UL; // 30 seconds
+// Intervals from config (will be loaded from SD card)
+static unsigned long g_heartbeatIntervalMs = 60000UL; // Default 60s
+static unsigned long g_sensorIntervalMs = 30000UL;    // Default 30s
 
 void setup()
 {
@@ -28,6 +32,25 @@ void setup()
     setLedState(LED_BOOT);
     
     logLine("TrailerAutomationClientS3 starting...");
+    
+    // Initialize SD card and load configuration FIRST
+    if (!initSdConfig())
+    {
+        logLine("FATAL: Failed to load SD card configuration!");
+        logLine("System halted. Please check SD card and config.json.");
+        setLedError(ERROR_SENSOR_READ); // Blink red to indicate config error
+        while (1)
+        {
+            updateLed();
+            delay(100);
+        }
+    }
+    
+    // Load intervals from config
+    const DeviceConfig& config = getDeviceConfig();
+    g_heartbeatIntervalMs = config.heartbeatSeconds * 1000UL;
+    g_sensorIntervalMs = config.sensorReadingSeconds * 1000UL;
+    
     logLine("Starting 15-second boot delay for hardware initialization (battery-safe)...");
     
     // Start non-blocking boot delay timer
@@ -46,6 +69,12 @@ void setup()
     // Initialize SHT31 sensor (can happen during boot delay)
     initSensor();
     
+    // Initialize relay control from config
+    if (!initRelayControl())
+    {
+        logLine("WARNING: Relay control initialization failed");
+    }
+    
     // Note: WiFi connection will happen in loop() after boot delay
 }
 
@@ -57,7 +86,7 @@ void loop()
     // Check if boot delay is complete
     if (!g_bootDelayComplete)
     {
-        if (millis() - g_bootDelayStartMs >= 15000)
+        if (millis() - g_bootDelayStartMs >= 3000)
         {
             logLine("Boot delay complete. Initializing WiFi radio...");
             
@@ -157,41 +186,100 @@ void loop()
             return;
         }
 
-        logLine("Gateway discovered, will start heartbeat and sensor loops.");
+        logLine("Gateway discovered, will start initialization sequence.");
+        
+        // Send immediate heartbeat
+        if (!sendHeartbeat())
+        {
+            logLine("Initial heartbeat failed, will retry in loop");
+        }
+        
+        // Register device (includes relay config and command port)
+        if (!registerDevice())
+        {
+            logLine("Device registration failed, will retry in loop");
+        }
+        else
+        {
+            g_deviceRegistered = true;
+            
+            // Start command listener
+            if (!initCommandListener())
+            {
+                logLine("Command listener failed to start");
+            }
+        }
+        
         clearLedError();  // Clear any previous errors
         setLedState(LED_CONNECTED);  // Show green for 5 seconds, then turn off
     }
 
-    // 3. Heartbeat timing
-    if (now - g_lastHeartbeatMs >= HEARTBEAT_INTERVAL_MS)
+    // 3. Re-register if needed (gateway might have restarted)
+    if (isGatewayKnown() && !g_deviceRegistered)
     {
-        if (!sendHeartbeat())
+        if (registerDevice())
         {
-            logLine("Heartbeat failed. Will keep trying.");
-            setLedError(ERROR_HEARTBEAT);  // 2 red blinks - Heartbeat failed
-            consecutiveFailures++;
+            g_deviceRegistered = true;
             
-            // Zombie WiFi detection - connected but traffic failing
-            if (consecutiveFailures >= 3 && WiFi.status() == WL_CONNECTED)
+            // Start command listener if not already running
+            if (!initCommandListener())
             {
-                logLine("WARNING: Zombie WiFi detected (connected but no traffic). Forcing reconnect...");
-                WiFi.disconnect(true);
-                delay(1000);
-                consecutiveFailures = 0;
-                return;  // Will reconnect on next loop
+                logLine("Command listener failed to start");
             }
+        }
+    }
+
+    // 4. Process incoming commands (non-blocking)
+    processCommandListener();
+
+    // 5. Heartbeat timing
+    if (now - g_lastHeartbeatMs >= g_heartbeatIntervalMs)
+    {
+        // sendHeartbeat() returns true if gateway requests re-registration
+        // Returns false on success (no re-registration needed)
+        // On failure, HTTP error is logged but we treat it like no re-registration
+        bool needsRegistration = sendHeartbeat();
+        
+        if (needsRegistration)
+        {
+            // Gateway requests re-registration (e.g., gateway restarted)
+            logLine("Gateway requests re-registration...");
+            g_deviceRegistered = false;  // Mark as needing registration
+            
+            if (registerDevice())
+            {
+                g_deviceRegistered = true;
+                logLine("Re-registration successful");
+                
+                // Restart command listener if needed
+                if (!initCommandListener())
+                {
+                    logLine("Command listener failed to restart");
+                }
+            }
+            else
+            {
+                logLine("Re-registration failed, will retry");
+            }
+            
+            clearLedError();  // Clear error - heartbeat succeeded
+            consecutiveFailures = 0;  // Reset failure counter
+            lastSuccessfulComm = now;
         }
         else
         {
-            clearLedError();  // Clear error if heartbeat succeeds
-            consecutiveFailures = 0;  // Reset failure counter on success
+            // Heartbeat completed (either success or failure)
+            // Check response body for success indication
+            clearLedError();
+            consecutiveFailures = 0;
             lastSuccessfulComm = now;
         }
+        
         g_lastHeartbeatMs = now;
     }
 
-    // 4. Sensor timing (independent of heartbeat)
-    if (now - g_lastSensorMs >= SENSOR_INTERVAL_MS)
+    // 6. Sensor timing (independent of heartbeat) - only if sensor is configured
+    if (isSensorAvailable() && now - g_lastSensorMs >= g_sensorIntervalMs)
     {
         if (!sendSensorReading())
         {
@@ -205,6 +293,6 @@ void loop()
         g_lastSensorMs = now;
     }
 
-    // 5. Small delay to avoid busy spin
+    // 7. Small delay to avoid busy spin
     delay(10);
 }

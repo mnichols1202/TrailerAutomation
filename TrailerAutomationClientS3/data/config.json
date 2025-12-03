@@ -1,0 +1,27 @@
+{
+  "WiFi": {
+    "SSID": "MM0001",
+    "Password": "J0shua07"
+  },
+  "Device": {
+    "ClientId": "esp32-s3-001",
+    "DeviceType": "ESP32-S3",
+    "FriendlyName": "ESP32 Node 1",
+    "CommandListenerPort": 8888
+  },
+  "Intervals": {
+    "HeartbeatSeconds": 60,
+    "SensorReadingSeconds": 30
+  },
+  "Hardware": {
+    "Sensors": [
+      {
+        "Id": "sht31-main",
+        "Type": "SHT31",
+        "Name": "Temperature & Humidity",
+        "I2cAddress": "0x44",
+        "Enabled": true
+      }
+    ]
+  }
+}

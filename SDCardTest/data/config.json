@@ -1,0 +1,31 @@
+{
+  "Device": {
+    "DeviceId": "esp32-s3-001",
+    "ClientId": "esp32-s3-001",
+    "DeviceType": "ESP32-S3",
+    "FriendlyName": "ESP32-S3 Sensor Node",
+    "CommandListenerPort": 8888
+  },
+  "Intervals": {
+    "HeartbeatSeconds": 60,
+    "SensorReadingSeconds": 30
+  },
+  "Hardware": {
+    "Relays": [
+      {
+        "Id": "relay1",
+        "Name": "LED 1",
+        "Pin": 4,
+        "InitialState": false,
+        "Enabled": true
+      },
+      {
+        "Id": "relay2",
+        "Name": "LED 2",
+        "Pin": 5,
+        "InitialState": false,
+        "Enabled": true
+      }
+    ]
+  }
+}

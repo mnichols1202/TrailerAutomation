@@ -3,10 +3,12 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <ArduinoJson.h>
 
 #include "config.h"
 #include "logging.h"
 #include "network.h"
+#include "sdconfig.h"
 
 bool sendHeartbeat()
 {
@@ -22,6 +24,9 @@ bool sendHeartbeat()
         return false;
     }
 
+    // Get device configuration
+    const DeviceConfig& config = getDeviceConfig();
+
     // Build URL: http://<gatewayHost>:<port>/api/heartbeat
     String url = String("http://") + getGatewayHost() + ":" + String(getGatewayPort()) + "/api/heartbeat";
 
@@ -30,11 +35,11 @@ bool sendHeartbeat()
     String payload;
     payload.reserve(128);
     payload  = "{\"ClientId\":\"";
-    payload += CLIENT_ID;
+    payload += config.clientId;
     payload += "\",\"DeviceType\":\"";
-    payload += DEVICE_TYPE;
+    payload += config.deviceType;
     payload += "\",\"FriendlyName\":\"";
-    payload += FRIENDLY_NAME;
+    payload += config.friendlyName;
     payload += "\"}";
 
     logLine(String("Sending heartbeat to ") + url);
@@ -64,8 +69,26 @@ bool sendHeartbeat()
     if (httpCode < 200 || httpCode >= 300)
     {
         logLine("Heartbeat received non-success HTTP status.");
-        return false;
+        return false;  // Return false on HTTP error (not re-registration needed)
     }
 
-    return true;
+    // Parse JSON response to check for "needsRegistration": true
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, response);
+    
+    if (error)
+    {
+        logLine("Failed to parse heartbeat response JSON");
+        return false;  // Assume no re-registration if can't parse
+    }
+
+    bool needsRegistration = doc["needsRegistration"] | false;
+    
+    if (needsRegistration)
+    {
+        logLine("Gateway requests re-registration");
+        return true;  // Signal re-registration needed
+    }
+
+    return false;  // Heartbeat OK, no re-registration needed
 }

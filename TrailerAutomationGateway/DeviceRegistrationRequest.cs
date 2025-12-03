@@ -5,7 +5,7 @@ namespace TrailerAutomationGateway
     /// </summary>
     public class DeviceRegistrationRequest
     {
-        public string DeviceId { get; set; } = string.Empty;
+        public string ClientId { get; set; } = string.Empty;
         public string? DeviceType { get; set; }
         public string? FriendlyName { get; set; }
         public string IpAddress { get; set; } = string.Empty;

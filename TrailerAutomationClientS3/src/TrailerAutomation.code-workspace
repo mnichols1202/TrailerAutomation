@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../../TrailerAutomationGateway"
+		},
+		{
+			"path": "../../SDCardTest"
 		}
 	],
 	"settings": {}

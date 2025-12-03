@@ -49,11 +49,6 @@ namespace TrailerAutomationClientNet
         private static void ValidateConfiguration(AppConfiguration config)
         {
             // Validate Device
-            if (string.IsNullOrWhiteSpace(config.Device.DeviceId))
-            {
-                throw new InvalidOperationException("Device.DeviceId cannot be empty.");
-            }
-
             if (string.IsNullOrWhiteSpace(config.Device.ClientId))
             {
                 throw new InvalidOperationException("Device.ClientId cannot be empty.");
@@ -119,7 +114,6 @@ namespace TrailerAutomationClientNet
         {
             Console.WriteLine("=== Configuration ===");
             Console.WriteLine($"Device:");
-            Console.WriteLine($"  DeviceId: {config.Device.DeviceId}");
             Console.WriteLine($"  ClientId: {config.Device.ClientId}");
             Console.WriteLine($"  DeviceType: {config.Device.DeviceType}");
             Console.WriteLine($"  FriendlyName: {config.Device.FriendlyName}");

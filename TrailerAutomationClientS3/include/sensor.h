@@ -3,6 +3,9 @@
 // Initialize the SHT31 sensor
 void initSensor();
 
+// Check if sensor is available and initialized
+bool isSensorAvailable();
+
 // Send a temperature/humidity reading to /api/sensor-readings
 bool sendSensorReading();
 

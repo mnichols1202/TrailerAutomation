@@ -72,10 +72,13 @@ namespace TrailerAutomationClientNet
 
             // Send initial heartbeat immediately to establish presence
             Console.WriteLine("Sending initial heartbeat...");
-            await SendHeartbeatAsync(http);
+            var needsRegistration = await SendHeartbeatAsync(http);
 
             // Register device with gateway (includes command port and capabilities)
-            await RegisterDeviceAsync(http);
+            if (needsRegistration || true) // Always register on startup
+            {
+                await RegisterDeviceAsync(http);
+            }
 
             // Start background sensor reporting loop (independent of heartbeat)
             Console.WriteLine("Starting sensor loop...");
@@ -89,7 +92,14 @@ namespace TrailerAutomationClientNet
             {
                 await Task.Delay(heartbeatInterval, cts.Token);
 
-                await SendHeartbeatAsync(http);
+                needsRegistration = await SendHeartbeatAsync(http);
+                
+                // If gateway requests re-registration (e.g., it restarted), re-register immediately
+                if (needsRegistration)
+                {
+                    Console.WriteLine("[Heartbeat] Re-registering device with gateway...");
+                    await RegisterDeviceAsync(http);
+                }
             }
             
             Console.WriteLine("Shutting down gracefully...");
@@ -161,7 +171,7 @@ namespace TrailerAutomationClientNet
             }
         }
 
-        private static async Task SendHeartbeatAsync(HttpClient http)
+        private static async Task<bool> SendHeartbeatAsync(HttpClient http)
         {
             try
             {
@@ -180,10 +190,29 @@ namespace TrailerAutomationClientNet
 
                 string respBody = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"[{DateTime.Now:T}] Heartbeat OK: {respBody}");
+
+                // Check if gateway requests re-registration (e.g., after gateway restart)
+                try
+                {
+                    using var doc = JsonDocument.Parse(respBody);
+                    if (doc.RootElement.TryGetProperty("needsRegistration", out var needsReg) && 
+                        needsReg.GetBoolean())
+                    {
+                        Console.WriteLine("[Heartbeat] Gateway requests re-registration");
+                        return true; // Signal that re-registration is needed
+                    }
+                }
+                catch
+                {
+                    // Ignore JSON parse errors - older gateway versions may not have this field
+                }
+
+                return false; // No re-registration needed
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[{DateTime.Now:T}] Heartbeat failed: {ex.Message}");
+                return false;
             }
         }
 
@@ -215,7 +244,7 @@ namespace TrailerAutomationClientNet
 
                 var registration = new
                 {
-                    DeviceId = _config.Device.DeviceId,
+                    ClientId = _config.Device.ClientId,
                     DeviceType = _config.Device.DeviceType,
                     FriendlyName = _config.Device.FriendlyName,
                     IpAddress = localIp,

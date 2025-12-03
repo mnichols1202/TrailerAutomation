@@ -9,11 +9,24 @@
 #include "config.h"
 #include "logging.h"
 #include "network.h"
+#include "sdconfig.h"
 
-Adafruit_SHT31 sht31 = Adafruit_SHT31();
+static Adafruit_SHT31 sht31 = Adafruit_SHT31();
+static bool sensorInitialized = false;
+
+bool isSensorAvailable()
+{
+    return sensorInitialized;
+}
 
 bool sendSensorReading()
 {
+    // Don't try to send if no sensor is initialized
+    if (!sensorInitialized)
+    {
+        return false;
+    }
+    
     if (!isGatewayKnown())
     {
         logLine("sendSensorReading() called but gateway is unknown.");
@@ -89,16 +102,48 @@ bool sendSensorReading()
 
 void initSensor()
 {
+    const DeviceConfig& config = getDeviceConfig();
+    
+    // If no sensors configured at all, skip initialization
+    if (config.sensorCount == 0)
+    {
+        logLine("[Sensor] No sensors configured. Sensor readings disabled.");
+        sensorInitialized = false;
+        return;
+    }
+    
+    // Check if any SHT31 sensors are configured and enabled
+    bool hasSht31 = false;
+    for (int i = 0; i < config.sensorCount; i++)
+    {
+        const SensorConfig& s = config.sensors[i];
+        if (strcmp(s.type, "SHT31") == 0 && s.enabled)
+        {
+            hasSht31 = true;
+            logLine("Found enabled SHT31 sensor in config: [" + String(s.id) + "] " + String(s.name));
+            break;
+        }
+    }
+    
+    if (!hasSht31)
+    {
+        logLine("[Sensor] No enabled SHT31 sensors in config. Sensor readings disabled.");
+        sensorInitialized = false;
+        return;
+    }
+    
     logLine("Initializing SHT31 sensor...");
     
     if (!sht31.begin(0x44))  // Default I2C address is 0x44
     {
         logLine("ERROR: Could not find SHT31 sensor!");
         logLine("Check wiring: SDA, SCL, VCC, GND");
+        sensorInitialized = false;
     }
     else
     {
         logLine("SHT31 sensor initialized successfully.");
+        sensorInitialized = true;
     }
 }
 

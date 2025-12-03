@@ -16,7 +16,6 @@ namespace TrailerAutomationClientNet
 
     public class DeviceConfig
     {
-        public string DeviceId { get; set; } = Environment.MachineName;
         public string ClientId { get; set; } = Environment.MachineName;
         public string DeviceType { get; set; } = "Unknown";
         public string FriendlyName { get; set; } = "Unnamed Device";

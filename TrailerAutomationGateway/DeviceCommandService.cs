@@ -24,11 +24,11 @@ namespace TrailerAutomationGateway
         /// <summary>
         /// Send a generic command to a device.
         /// </summary>
-        public async Task<CommandResult> SendCommandAsync(string deviceId, DeviceCommand command)
+        public async Task<CommandResult> SendCommandAsync(string clientId, DeviceCommand command)
         {
-            if (string.IsNullOrWhiteSpace(deviceId))
+            if (string.IsNullOrWhiteSpace(clientId))
             {
-                return CommandResult.ErrorResult("DeviceId is required", "INVALID_DEVICE_ID");
+                return CommandResult.ErrorResult("ClientId is required", "INVALID_CLIENT_ID");
             }
 
             if (command == null)
@@ -37,33 +37,33 @@ namespace TrailerAutomationGateway
             }
 
             // Resolve device from registry
-            var client = _clientRegistry.GetClient(deviceId);
+            var client = _clientRegistry.GetClient(clientId);
             if (client == null)
             {
-                Console.WriteLine($"[DeviceCommand] Device not found: {deviceId}");
+                Console.WriteLine($"[DeviceCommand] Device not found: {clientId}");
                 return CommandResult.ErrorResult(
-                    $"Device '{deviceId}' not found in registry",
+                    $"Device '{clientId}' not found in registry",
                     "DEVICE_NOT_FOUND");
             }
 
             if (string.IsNullOrWhiteSpace(client.RemoteIp))
             {
-                Console.WriteLine($"[DeviceCommand] Device has no IP address: {deviceId}");
+                Console.WriteLine($"[DeviceCommand] Device has no IP address: {clientId}");
                 return CommandResult.ErrorResult(
-                    $"Device '{deviceId}' has no IP address",
+                    $"Device '{clientId}' has no IP address",
                     "NO_IP_ADDRESS");
             }
 
             if (client.CommandPort <= 0)
             {
-                Console.WriteLine($"[DeviceCommand] Device has no command port: {deviceId}");
+                Console.WriteLine($"[DeviceCommand] Device has no command port: {clientId}");
                 return CommandResult.ErrorResult(
-                    $"Device '{deviceId}' has no command port configured",
+                    $"Device '{clientId}' has no command port configured",
                     "NO_COMMAND_PORT");
             }
 
             Console.WriteLine(
-                $"[DeviceCommand] Sending {command.Type} command to {deviceId} " +
+                $"[DeviceCommand] Sending {command.Type} command to {clientId} " +
                 $"({client.RemoteIp}:{client.CommandPort}) " +
                 $"CommandId={command.CommandId}");
 
@@ -86,7 +86,7 @@ namespace TrailerAutomationGateway
                 {
                     Console.WriteLine($"[DeviceCommand] Connection timeout to {client.RemoteIp}:{client.CommandPort}");
                     return CommandResult.ErrorResult(
-                        $"Connection timeout to device {deviceId}",
+                        $"Connection timeout to device {clientId}",
                         "CONNECTION_TIMEOUT");
                 }
 
@@ -95,8 +95,10 @@ namespace TrailerAutomationGateway
                 Console.WriteLine($"[DeviceCommand] Connected to {client.RemoteIp}:{client.CommandPort}");
 
                 await using var stream = tcpClient.GetStream();
-                await using var writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
-                using var reader = new StreamReader(stream, Encoding.UTF8);
+                // Use UTF8 without BOM to avoid parse errors on ESP32
+                var utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+                await using var writer = new StreamWriter(stream, utf8NoBom) { AutoFlush = true };
+                using var reader = new StreamReader(stream, utf8NoBom);
 
                 // Send command (JSON + newline)
                 await writer.WriteLineAsync(commandJson);
@@ -107,18 +109,18 @@ namespace TrailerAutomationGateway
                 var readTask = reader.ReadLineAsync();
                 if (await Task.WhenAny(readTask, Task.Delay(ResponseTimeoutMs)) != readTask)
                 {
-                    Console.WriteLine($"[DeviceCommand] Response timeout from {deviceId}");
+                    Console.WriteLine($"[DeviceCommand] Response timeout from {clientId}");
                     return CommandResult.ErrorResult(
-                        $"Response timeout from device {deviceId}",
+                        $"Response timeout from device {clientId}",
                         "RESPONSE_TIMEOUT");
                 }
 
                 var responseLine = await readTask;
                 if (string.IsNullOrEmpty(responseLine))
                 {
-                    Console.WriteLine($"[DeviceCommand] Empty response from {deviceId}");
+                    Console.WriteLine($"[DeviceCommand] Empty response from {clientId}");
                     return CommandResult.ErrorResult(
-                        $"Empty response from device {deviceId}",
+                        $"Empty response from device {clientId}",
                         "EMPTY_RESPONSE");
                 }
 
@@ -183,7 +185,7 @@ namespace TrailerAutomationGateway
         /// <summary>
         /// Convenience method to send a relay control command.
         /// </summary>
-        public async Task<CommandResult> SendSetRelayCommandAsync(string deviceId, string relayId, string state)
+        public async Task<CommandResult> SendSetRelayCommandAsync(string clientId, string relayId, string state)
         {
             if (string.IsNullOrWhiteSpace(relayId))
             {
@@ -210,7 +212,7 @@ namespace TrailerAutomationGateway
                 })
             };
 
-            return await SendCommandAsync(deviceId, command);
+            return await SendCommandAsync(clientId, command);
         }
     }
 }

@@ -86,11 +86,16 @@ app.MapPost("/api/heartbeat", (HeartbeatRequest request, HttpContext httpContext
         remoteIp
     );
 
+    // Check if device is fully registered (has command port and capabilities)
+    var client = registry.GetClient(request.ClientId);
+    var needsRegistration = client == null || client.CommandPort == 0;
+
     return Results.Ok(new
     {
         status = "OK",
         clientId = request.ClientId,
-        timestampUtc = DateTime.UtcNow
+        timestampUtc = DateTime.UtcNow,
+        needsRegistration = needsRegistration
     });
 })
 .WithName("HeartbeatPost")
@@ -124,7 +129,7 @@ app.MapPost("/api/devices/register", (DeviceRegistrationRequest request, ClientR
     try
     {
         clientRegistry.RegisterDevice(
-            request.DeviceId,
+            request.ClientId,
             request.DeviceType,
             request.FriendlyName,
             request.IpAddress,
@@ -135,7 +140,7 @@ app.MapPost("/api/devices/register", (DeviceRegistrationRequest request, ClientR
 
         Console.WriteLine(
             $"[Device] POST /api/devices/register {DateTime.UtcNow:O} " +
-            $"DeviceId={request.DeviceId} " +
+            $"ClientId={request.ClientId} " +
             $"IP={request.IpAddress} " +
             $"Port={request.CommandPort} " +
             $"Capabilities=[{string.Join(", ", request.Capabilities ?? Array.Empty<string>())}]");
@@ -143,7 +148,7 @@ app.MapPost("/api/devices/register", (DeviceRegistrationRequest request, ClientR
         return Results.Ok(new
         {
             status = "OK",
-            deviceId = request.DeviceId,
+            clientId = request.ClientId,
             timestampUtc = DateTime.UtcNow
         });
     }
@@ -175,11 +180,11 @@ app.MapGet("/api/devices", (ClientRegistry clientRegistry) =>
 .WithOpenApi();
 
 // Get a single device by id
-app.MapGet("/api/devices/{deviceId}", (string deviceId, ClientRegistry clientRegistry) =>
+app.MapGet("/api/devices/{clientId}", (string clientId, ClientRegistry clientRegistry) =>
 {
-    var client = clientRegistry.GetClient(deviceId);
+    var client = clientRegistry.GetClient(clientId);
     Console.WriteLine(
-        $"[Device] GET /api/devices/{deviceId} {DateTime.UtcNow:O} " +
+        $"[Device] GET /api/devices/{clientId} {DateTime.UtcNow:O} " +
         $"Found={(client != null)}");
     return client is null ? Results.NotFound() : Results.Ok(client);
 })
@@ -187,17 +192,17 @@ app.MapGet("/api/devices/{deviceId}", (string deviceId, ClientRegistry clientReg
 .WithOpenApi();
 
 // Send setRelay command to a device
-app.MapPost("/api/devices/{deviceId}/commands/setRelay", async (
-    string deviceId,
+app.MapPost("/api/devices/{clientId}/commands/setRelay", async (
+    string clientId,
     SetRelayCommandRequest request,
     DeviceCommandService commandService) =>
 {
     Console.WriteLine(
-        $"[Device] POST /api/devices/{deviceId}/commands/setRelay {DateTime.UtcNow:O} " +
+        $"[Device] POST /api/devices/{clientId}/commands/setRelay {DateTime.UtcNow:O} " +
         $"RelayId={request.RelayId} State={request.State}");
 
     var result = await commandService.SendSetRelayCommandAsync(
-        deviceId,
+        clientId,
         request.RelayId,
         request.State);
 

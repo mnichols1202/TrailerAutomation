@@ -21,11 +21,8 @@ namespace TrailerAutomationGateway
         {
             _repository = repository;
 
-            // Load latest readings from database into memory on startup
-            foreach (var reading in _repository.GetAllLatest())
-            {
-                _readings[reading.ClientId] = reading;
-            }
+            // Don't load from database on startup - only show live readings from connected devices
+            // Historical data is available via the History page
         }
 
         /// <summary>
