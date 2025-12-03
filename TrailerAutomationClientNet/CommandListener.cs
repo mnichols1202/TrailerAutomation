@@ -129,6 +129,58 @@ namespace TrailerAutomationClientNet
                         };
                         Console.WriteLine($"[CommandListener] Identify command received, responding with ClientId: {_config.Device.ClientId}");
                     }
+                    else if (commandType == "init")
+                    {
+                        // Trigger re-initialization by calling RegisterDeviceAsync
+                        response = new
+                        {
+                            commandId = commandId,
+                            success = true,
+                            message = "Device will re-initialize"
+                        };
+                        Console.WriteLine($"[CommandListener] Init command received, will trigger re-registration");
+                        
+                        // Send response first
+                        string initResponseJson = JsonSerializer.Serialize(response);
+                        await writer.WriteLineAsync(initResponseJson);
+                        await writer.FlushAsync();
+                        Console.WriteLine($"[CommandListener] Sent response: {initResponseJson}");
+                        
+                        // Trigger re-registration in background
+                        _ = Task.Run(async () =>
+                        {
+                            await Task.Delay(500);  // Brief delay
+                            await Program.TriggerReRegistrationAsync();
+                        });
+                        
+                        return; // Skip normal response sending
+                    }
+                    else if (commandType == "reboot")
+                    {
+                        // Reboot the application
+                        response = new
+                        {
+                            commandId = commandId,
+                            success = true,
+                            message = "Device rebooting"
+                        };
+                        Console.WriteLine($"[CommandListener] Reboot command received, application will restart");
+                        
+                        // Send response first
+                        string rebootResponseJson = JsonSerializer.Serialize(response);
+                        await writer.WriteLineAsync(rebootResponseJson);
+                        await writer.FlushAsync();
+                        Console.WriteLine($"[CommandListener] Sent response: {rebootResponseJson}");
+                        
+                        // Exit application (systemd or container orchestrator should restart it)
+                        _ = Task.Run(async () =>
+                        {
+                            await Task.Delay(1000);
+                            Environment.Exit(0);
+                        });
+                        
+                        return; // Skip normal response sending
+                    }
                     else if (commandType == "setRelay")
                     {
                         response = await HandleSetRelayCommandAsync(root, commandId);

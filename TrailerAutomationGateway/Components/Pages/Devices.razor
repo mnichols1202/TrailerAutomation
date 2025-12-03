@@ -110,6 +110,14 @@
                             {
                                 <span style="color: #95a5a6;">No relay control</span>
                             }
+                            <br />
+                            <button class="refresh-btn" 
+                                    style="background: #fd7e14; color: white; padding: 5px 10px;" 
+                                    @onclick="() => RebootDevice(device.DeviceId)"
+                                    disabled="@(!isOnline)"
+                                    title="Reboot Device">
+                                🔄 Reboot
+                            </button>
                         </td>
                     </tr>
                     @if (_commandResults.ContainsKey(device.DeviceId))
@@ -262,80 +270,58 @@
 
             Console.WriteLine($"[ReInit] Starting re-initialization of {devices.Count} devices...");
 
-            // Step 1: Send ping command to all devices to check connectivity
-            var respondingDevices = new List<string>();
-            var nonRespondingDevices = new List<string>();
+            var successCount = 0;
+            var failedDevices = new List<string>();
 
             foreach (var device in devices)
             {
                 try
                 {
-                    Console.WriteLine($"[ReInit] Pinging {device.ClientId} at {device.RemoteIp}:{device.CommandPort}...");
+                    Console.WriteLine($"[ReInit] Sending init command to {device.ClientId} at {device.RemoteIp}:{device.CommandPort}...");
                     
-                    // Send an "identify" command asking the device to report its actual ClientId
-                    var identifyCommand = new DeviceCommand
+                    // Send "init" command to trigger device re-registration
+                    var initCommand = new DeviceCommand
                     {
                         CommandId = Guid.NewGuid().ToString(),
-                        Type = "identify",
+                        Type = "init",
                         Payload = System.Text.Json.JsonSerializer.SerializeToElement(new { })
                     };
                     
-                    var result = await CommandService.SendCommandAsync(device.ClientId, identifyCommand);
+                    var result = await CommandService.SendCommandAsync(device.ClientId, initCommand);
                     
-                    if (result != null && result.Success && result.Data != null)
+                    if (result != null && result.Success)
                     {
-                        // Check if the returned ClientId matches what we expected
-                        var dataElement = (System.Text.Json.JsonElement)result.Data;
-                        var actualClientId = dataElement.TryGetProperty("clientId", out var clientIdProp) 
-                            ? clientIdProp.GetString() 
-                            : null;
-                        
-                        if (actualClientId == device.ClientId)
-                        {
-                            Console.WriteLine($"[ReInit] ✅ {device.ClientId} responded correctly");
-                            respondingDevices.Add(device.ClientId);
-                        }
-                        else
-                        {
-                            Console.WriteLine($"[ReInit] ❌ {device.ClientId} responded but identified as '{actualClientId}' - REMOVING");
-                            nonRespondingDevices.Add(device.ClientId);
-                        }
+                        Console.WriteLine($"[ReInit] ✅ {device.ClientId} will re-initialize");
+                        successCount++;
                     }
                     else
                     {
-                        Console.WriteLine($"[ReInit] ❌ {device.ClientId} did not respond or returned error");
-                        nonRespondingDevices.Add(device.ClientId);
+                        Console.WriteLine($"[ReInit] ❌ {device.ClientId} init command failed - marking for removal");
+                        failedDevices.Add(device.ClientId);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[ReInit] ❌ {device.ClientId} failed to respond: {ex.Message}");
-                    nonRespondingDevices.Add(device.ClientId);
+                    Console.WriteLine($"[ReInit] ❌ {device.ClientId} failed: {ex.Message} - marking for removal");
+                    failedDevices.Add(device.ClientId);
                 }
 
                 StateHasChanged();
             }
 
-            // Step 2: Remove non-responding devices from registry
-            foreach (var clientId in nonRespondingDevices)
+            // Remove non-responding devices from registry
+            foreach (var clientId in failedDevices)
             {
                 ClientRegistry.RemoveClient(clientId);
                 Console.WriteLine($"[ReInit] Removed non-responding device: {clientId}");
             }
 
-            // Step 3: Clear registry and force all responding devices to re-register
-            foreach (var clientId in respondingDevices)
-            {
-                ClientRegistry.RemoveClient(clientId);
-                Console.WriteLine($"[ReInit] Cleared {clientId} from registry - will re-register on next heartbeat");
-            }
+            _reInitMessage = $"✅ Re-initialization complete: {successCount} devices will re-register, {failedDevices.Count} removed";
+            _reInitSuccess = successCount > 0;
 
-            _reInitMessage = $"✅ Re-initialization complete: {respondingDevices.Count} devices responding, {nonRespondingDevices.Count} removed";
-            _reInitSuccess = true;
+            Console.WriteLine($"[ReInit] Complete - {successCount} succeeded, {failedDevices.Count} removed");
 
-            Console.WriteLine($"[ReInit] Complete - {respondingDevices.Count} responding, {nonRespondingDevices.Count} removed");
-
-            // Reload devices after a short delay to show updated list
+            // Reload devices after a short delay to show updated registrations
             await Task.Delay(2000);
             await LoadDevices();
         }
@@ -350,6 +336,59 @@
             _isReInitializing = false;
             StateHasChanged();
         }
+    }
+
+    private async Task RebootDevice(string deviceId)
+    {
+        try
+        {
+            Console.WriteLine($"[Reboot] Sending reboot command to {deviceId}...");
+            
+            var rebootCommand = new DeviceCommand
+            {
+                CommandId = Guid.NewGuid().ToString(),
+                Type = "reboot",
+                Payload = System.Text.Json.JsonSerializer.SerializeToElement(new { })
+            };
+            
+            var result = await CommandService.SendCommandAsync(deviceId, rebootCommand);
+            
+            if (result != null && result.Success)
+            {
+                Console.WriteLine($"[Reboot] ✅ {deviceId} is rebooting");
+                
+                _commandResults[deviceId] = new CommandResult
+                {
+                    Success = true,
+                    Message = "Device is rebooting...",
+                    ErrorCode = null
+                };
+            }
+            else
+            {
+                Console.WriteLine($"[Reboot] ❌ {deviceId} reboot command failed");
+                
+                _commandResults[deviceId] = new CommandResult
+                {
+                    Success = false,
+                    Message = result?.Message ?? "Reboot command failed",
+                    ErrorCode = result?.ErrorCode ?? "REBOOT_ERROR"
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Reboot] ❌ {deviceId} failed: {ex.Message}");
+            
+            _commandResults[deviceId] = new CommandResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}",
+                ErrorCode = "REBOOT_ERROR"
+            };
+        }
+        
+        StateHasChanged();
     }
 
     public void Dispose()

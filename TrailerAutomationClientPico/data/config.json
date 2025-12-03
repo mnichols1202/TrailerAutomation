@@ -4,7 +4,7 @@
     "Password": "J0shua07"
   },
   "Device": {
-    "ClientId": "Pico2W-001",
+    "ClientId": "Pico-2W-001",
     "DeviceType": "Pico2W",
     "FriendlyName": "Pico 2W Node 1",
     "CommandListenerPort": 8888

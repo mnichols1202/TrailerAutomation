@@ -139,6 +139,37 @@ void processCommandListener()
         
         logLine("[CommandListener] Identify command received, responding with ClientId: " + String(config.clientId));
     }
+    else if (strcmp(commandType, "init") == 0)
+    {
+        // Trigger re-initialization - mark as needing registration and send response
+        extern bool g_deviceRegistered;
+        g_deviceRegistered = false;  // Force re-registration on next loop
+        
+        respDoc["success"] = true;
+        respDoc["message"] = "Device will re-initialize";
+        
+        logLine("[CommandListener] Init command received, will re-register with gateway");
+    }
+    else if (strcmp(commandType, "reboot") == 0)
+    {
+        // Send success response first, then reboot
+        respDoc["success"] = true;
+        respDoc["message"] = "Device rebooting";
+        
+        logLine("[CommandListener] Reboot command received, device will restart in 1 second");
+        
+        // Send response
+        String response;
+        serializeJson(respDoc, response);
+        client.println(response);
+        client.flush();
+        client.stop();
+        
+        // Wait a moment for response to be sent, then reboot
+        delay(1000);
+        rp2040.reboot();
+        return;  // Never reached
+    }
     else if (strcmp(commandType, "setRelay") == 0)
     {
         // Extract payload

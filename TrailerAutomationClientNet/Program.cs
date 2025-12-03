@@ -10,6 +10,7 @@ namespace TrailerAutomationClientNet
     internal class Program
     {
         private static AppConfiguration _config = null!;
+        private static HttpClient? _httpClient = null;
 
         static async Task Main(string[] args)
         {
@@ -46,11 +47,12 @@ namespace TrailerAutomationClientNet
                 Console.WriteLine($"Discovered Gateway: {gatewayUri}");
             }
 
-            using var http = new HttpClient
+            _httpClient = new HttpClient
             {
                 BaseAddress = gatewayUri,
                 Timeout = TimeSpan.FromSeconds(5)
             };
+            var http = _httpClient;
 
             // Set up cancellation for graceful shutdown
             using var cts = new System.Threading.CancellationTokenSource();
@@ -306,6 +308,20 @@ namespace TrailerAutomationClientNet
             catch
             {
                 return "127.0.0.1";
+            }
+        }
+
+        // Public method to allow CommandListener to trigger re-registration
+        public static async Task TriggerReRegistrationAsync()
+        {
+            if (_httpClient != null)
+            {
+                Console.WriteLine("[Init] Triggering device re-registration...");
+                await RegisterDeviceAsync(_httpClient);
+            }
+            else
+            {
+                Console.WriteLine("[Init] Cannot trigger re-registration: HTTP client not initialized");
             }
         }
     }

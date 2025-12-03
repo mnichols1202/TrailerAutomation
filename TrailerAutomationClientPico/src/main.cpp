@@ -15,7 +15,7 @@ static unsigned long g_lastHeartbeatMs = 0;
 static unsigned long g_lastSensorMs    = 0;
 static unsigned long g_bootDelayStartMs = 0;
 static bool g_bootDelayComplete = false;
-static bool g_deviceRegistered = false;
+bool g_deviceRegistered = false;  // Non-static so commandlistener can access
 
 // Intervals from config (will be loaded from LittleFS)
 static unsigned long g_heartbeatIntervalMs = 60000UL; // Default 60s
