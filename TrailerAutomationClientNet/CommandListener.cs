@@ -101,7 +101,35 @@ namespace TrailerAutomationClientNet
                     // Handle command based on type
                     object? response = null;
 
-                    if (commandType == "setRelay")
+                    if (commandType == "ping")
+                    {
+                        // Simple ping/pong response for connectivity check
+                        response = new
+                        {
+                            commandId = commandId,
+                            success = true,
+                            message = "pong"
+                        };
+                        Console.WriteLine($"[CommandListener] Ping received, responding with pong");
+                    }
+                    else if (commandType == "identify")
+                    {
+                        // Return actual ClientId so gateway can verify identity
+                        response = new
+                        {
+                            commandId = commandId,
+                            success = true,
+                            message = "Device identified",
+                            data = new
+                            {
+                                clientId = _config.Device.ClientId,
+                                deviceType = _config.Device.DeviceType,
+                                friendlyName = _config.Device.FriendlyName
+                            }
+                        };
+                        Console.WriteLine($"[CommandListener] Identify command received, responding with ClientId: {_config.Device.ClientId}");
+                    }
+                    else if (commandType == "setRelay")
                     {
                         response = await HandleSetRelayCommandAsync(root, commandId);
                     }

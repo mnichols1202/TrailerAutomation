@@ -1,0 +1,36 @@
+{
+  "WiFi": {
+    "SSID": "MM0001",
+    "Password": "J0shua07"
+  },
+  "Device": {
+    "ClientId": "Pico2W-001",
+    "DeviceType": "Pico2W",
+    "FriendlyName": "Pico 2W Node 1",
+    "CommandListenerPort": 8888
+  },
+  "Intervals": {
+    "HeartbeatSeconds": 60,
+    "SensorReadingSeconds": 30
+  },
+  "Hardware": {
+    "Relays": [
+      {
+        "Id": "relay1",
+        "Name": "Relay 1",
+        "Pin": 15,
+        "InitialState": false,
+        "Enabled": true
+      }
+    ],
+    "Sensors": [
+      {
+        "Id": "sht31_1",
+        "Name": "SHT31 Sensor",
+        "Type": "SHT31",
+        "I2cAddress": "0x44",
+        "Enabled": true
+      }
+    ]
+  }
+}

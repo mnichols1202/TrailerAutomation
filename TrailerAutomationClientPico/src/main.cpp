@@ -1,0 +1,280 @@
+#include <Arduino.h>
+
+#include "config.h"
+#include "logging.h"
+#include "network.h"
+#include "heartbeat.h"
+#include "sensor.h"
+#include "rgbled.h"
+#include "fsconfig.h"
+#include "relaycontrol.h"
+#include "commandlistener.h"
+
+// Timers for periodic tasks
+static unsigned long g_lastHeartbeatMs = 0;
+static unsigned long g_lastSensorMs    = 0;
+static unsigned long g_bootDelayStartMs = 0;
+static bool g_bootDelayComplete = false;
+static bool g_deviceRegistered = false;
+
+// Intervals from config (will be loaded from LittleFS)
+static unsigned long g_heartbeatIntervalMs = 60000UL; // Default 60s
+static unsigned long g_sensorIntervalMs = 30000UL;    // Default 30s
+
+void setup()
+{
+    Serial.begin(115200);
+    delay(500);  // Let serial stabilize
+    
+    // Initialize RGB LED and show red boot indicator
+    initRgbLed();
+    setLedState(LED_BOOT);
+    
+    logLine("TrailerAutomationClientPico starting...");
+    logLine("Raspberry Pi Pico 2 W");
+    
+    // Initialize LittleFS and load configuration FIRST
+    if (!initFsConfig())
+    {
+        logLine("FATAL: Failed to load LittleFS configuration!");
+        logLine("System halted. Please check LittleFS and config.json.");
+        setLedError(ERROR_SENSOR_READ); // Blink red to indicate config error
+        while (1)
+        {
+            updateLed();
+            delay(100);
+        }
+    }
+    
+    // Load intervals from config
+    const DeviceConfig& config = getDeviceConfig();
+    g_heartbeatIntervalMs = config.heartbeatSeconds * 1000UL;
+    g_sensorIntervalMs = config.sensorReadingSeconds * 1000UL;
+    
+    logLine("Starting 3-second boot delay for hardware initialization...");
+    
+    // Start non-blocking boot delay timer
+    g_bootDelayStartMs = millis();
+    g_bootDelayComplete = false;
+    
+    // CRITICAL: Disable WiFi radio immediately to ensure clean state
+    WiFi.mode(WIFI_OFF);
+    delay(100);
+    
+    // Initialize SHT31 sensor (can happen during boot delay)
+    initSensor();
+    
+    // Initialize relay control from config
+    if (!initRelayControl())
+    {
+        logLine("WARNING: Relay control initialization failed");
+    }
+    
+    // Note: WiFi connection will happen in loop() after boot delay
+}
+
+void loop()
+{
+    // Update LED animation
+    updateLed();
+    
+    // Check if boot delay is complete
+    if (!g_bootDelayComplete)
+    {
+        if (millis() - g_bootDelayStartMs >= 3000)
+        {
+            logLine("Boot delay complete. Initializing WiFi radio...");
+            
+            // Power up WiFi radio
+            WiFi.mode(WIFI_STA);
+            delay(1000);  // Delay for radio to stabilize
+            
+            g_bootDelayComplete = true;
+            
+            // Show connecting status (solid blue)
+            setLedState(LED_CONNECTING);
+            
+            // Attempt initial WiFi connection
+            if (!ensureWifiConnected())
+            {
+                logLine("Initial Wi-Fi connection failed, will retry in loop.");
+            }
+            
+            // Start mDNS
+            if (!startMdns())
+            {
+                logLine("mDNS startup failed, gateway discovery may not work.");
+                setLedError(ERROR_MDNS);
+            }
+            else
+            {
+                logLine("mDNS initialized, will attempt gateway discovery.");
+            }
+            
+            unsigned long now = millis();
+            g_lastHeartbeatMs = now;
+            g_lastSensorMs    = now;
+        }
+        
+        // Still waiting for boot delay - keep LED red and yield
+        delay(100);
+        return;
+    }
+    
+    // 1. Ensure Wi-Fi
+    if (!ensureWifiConnected())
+    {
+        if (isGatewayKnown())
+        {
+            logLine("Lost Wi-Fi; forgetting previously known gateway.");
+            forgetGateway();
+        }
+
+        // Show connecting status (solid blue)
+        setLedState(LED_CONNECTING);
+
+        // Determine specific WiFi error code
+        int wifiStatus = getLastWifiError();
+        LedErrorCode errorCode;
+        
+        switch (wifiStatus)
+        {
+            case WL_NO_SSID_AVAIL:
+                errorCode = ERROR_WIFI_NO_SSID;  // 2 blue blinks
+                break;
+            case WL_CONNECT_FAILED:
+                errorCode = ERROR_WIFI_AUTH_FAIL;  // 3 blue blinks
+                break;
+            case WL_DISCONNECTED:
+                errorCode = ERROR_WIFI_DISCONNECTED;  // 4 blue blinks
+                break;
+            case WL_IDLE_STATUS:
+                errorCode = ERROR_WIFI_TIMEOUT;  // 1 blue blink
+                break;
+            default:
+                errorCode = ERROR_WIFI_GENERIC;  // 5 blue blinks
+                break;
+        }
+        
+        setLedError(errorCode);
+        delay(1000);
+        return;
+    }
+
+    // 2. Ensure gateway discovery
+    unsigned long now = millis();
+    
+    if (!isGatewayKnown())
+    {
+        logLine("Gateway not known, attempting mDNS discovery...");
+        if (!discoverGateway())
+        {
+            logLine("Gateway discovery attempt failed; will retry.");
+            setLedError(ERROR_MDNS);  // 1 red blink - mDNS/Gateway discovery failed
+            delay(2000);
+            return;
+        }
+
+        logLine("Gateway discovered, will start initialization sequence.");
+        
+        // Send immediate heartbeat
+        if (!sendHeartbeat())
+        {
+            logLine("Initial heartbeat failed, will retry in loop");
+        }
+        
+        // Register device (includes relay config and command port)
+        if (!registerDevice())
+        {
+            logLine("Device registration failed, will retry in loop");
+        }
+        else
+        {
+            g_deviceRegistered = true;
+            
+            // Start command listener
+            if (!initCommandListener())
+            {
+                logLine("Command listener failed to start");
+            }
+        }
+        
+        clearLedError();  // Clear any previous errors
+        setLedState(LED_CONNECTED);  // Show green for 5 seconds, then turn off
+    }
+
+    // 3. Re-register if needed (gateway might have restarted)
+    if (isGatewayKnown() && !g_deviceRegistered)
+    {
+        if (registerDevice())
+        {
+            g_deviceRegistered = true;
+            
+            // Start command listener if not already running
+            if (!initCommandListener())
+            {
+                logLine("Command listener failed to start");
+            }
+        }
+    }
+
+    // 4. Process incoming commands (non-blocking)
+    processCommandListener();
+
+    // 5. Heartbeat timing
+    if (now - g_lastHeartbeatMs >= g_heartbeatIntervalMs)
+    {
+        // sendHeartbeat() returns true if gateway requests re-registration
+        bool needsRegistration = sendHeartbeat();
+        
+        if (needsRegistration)
+        {
+            // Gateway requests re-registration (e.g., gateway restarted)
+            logLine("Gateway requests re-registration...");
+            g_deviceRegistered = false;  // Mark as needing registration
+            
+            if (registerDevice())
+            {
+                g_deviceRegistered = true;
+                logLine("Re-registration successful");
+                
+                // Restart command listener if needed
+                if (!initCommandListener())
+                {
+                    logLine("Command listener failed to restart");
+                }
+            }
+            else
+            {
+                logLine("Re-registration failed, will retry");
+            }
+            
+            clearLedError();  // Clear error - heartbeat succeeded
+        }
+        else
+        {
+            // Heartbeat completed successfully
+            clearLedError();
+        }
+        
+        g_lastHeartbeatMs = now;
+    }
+
+    // 6. Sensor timing (independent of heartbeat) - only if sensor is configured
+    if (isSensorAvailable() && now - g_lastSensorMs >= g_sensorIntervalMs)
+    {
+        if (!sendSensorReading())
+        {
+            logLine("Sensor reading failed. Will keep trying.");
+            setLedError(ERROR_SENSOR_SEND);  // 3 red blinks - Sensor send failed
+        }
+        else
+        {
+            clearLedError();  // Clear error if sensor send succeeds
+        }
+        g_lastSensorMs = now;
+    }
+
+    // 7. Small delay to avoid busy spin
+    delay(10);
+}

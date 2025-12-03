@@ -116,7 +116,30 @@ void processCommandListener()
     JsonDocument respDoc;
     respDoc["commandId"] = commandId;
     
-    if (strcmp(commandType, "setRelay") == 0)
+    if (strcmp(commandType, "ping") == 0)
+    {
+        // Simple ping/pong response for connectivity check
+        respDoc["success"] = true;
+        respDoc["message"] = "pong";
+        
+        logLine("[CommandListener] Ping received, responding with pong");
+    }
+    else if (strcmp(commandType, "identify") == 0)
+    {
+        // Return actual ClientId so gateway can verify identity
+        const DeviceConfig& config = getDeviceConfig();
+        
+        respDoc["success"] = true;
+        respDoc["message"] = "Device identified";
+        
+        JsonObject data = respDoc["data"].to<JsonObject>();
+        data["clientId"] = config.clientId;
+        data["deviceType"] = config.deviceType;
+        data["friendlyName"] = config.friendlyName;
+        
+        logLine("[CommandListener] Identify command received, responding with ClientId: " + String(config.clientId));
+    }
+    else if (strcmp(commandType, "setRelay") == 0)
     {
         // Extract payload
         JsonObject payload = cmdDoc["payload"];

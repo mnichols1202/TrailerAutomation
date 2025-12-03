@@ -206,8 +206,11 @@ int getLastWifiError()
 
 bool startMdns()
 {
-    // Use CLIENT_ID as the mDNS hostname so you can see it on the LAN if desired
-    if (!MDNS.begin(CLIENT_ID))
+    // Get device configuration
+    const DeviceConfig& config = getDeviceConfig();
+    
+    // Use ClientId as the mDNS hostname so you can see it on the LAN if desired
+    if (!MDNS.begin(config.clientId))
     {
         logLine("MDNS.begin() failed.");
         return false;

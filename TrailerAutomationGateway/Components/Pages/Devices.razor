@@ -11,9 +11,26 @@
     
     <div style="margin-bottom: 20px;">
         <button class="refresh-btn" @onclick="LoadDevices">🔄 Refresh</button>
+        <button class="refresh-btn btn-danger" style="margin-left: 10px;" @onclick="ReInitDevices" disabled="@_isReInitializing">
+            @if (_isReInitializing)
+            {
+                <span>⏳ Re-Initializing...</span>
+            }
+            else
+            {
+                <span>🔄 Re-Init All Devices</span>
+            }
+        </button>
         <span style="margin-left: 20px; color: #7f8c8d;">
             Last updated: <strong>@DateTime.Now.ToString("HH:mm:ss")</strong>
         </span>
+        @if (!string.IsNullOrEmpty(_reInitMessage))
+        {
+            <br/>
+            <span style="margin-top: 10px; display: inline-block; color: @(_reInitSuccess ? "#28a745" : "#dc3545");">
+                @_reInitMessage
+            </span>
+        }
     </div>
     
     @if (!_devices.Any())
@@ -137,6 +154,9 @@
     private Dictionary<string, CommandResult> _commandResults = new();
     private Dictionary<string, bool> _relayStates = new();
     private System.Threading.Timer? _timer;
+    private bool _isReInitializing = false;
+    private string _reInitMessage = string.Empty;
+    private bool _reInitSuccess = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -217,11 +237,119 @@
             StateHasChanged();
         }
     }
-
+    
     private void ClearResult(string deviceId)
     {
         _commandResults.Remove(deviceId);
         StateHasChanged();
+    }
+
+    private async Task ReInitDevices()
+    {
+        _isReInitializing = true;
+        _reInitMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var devices = ClientRegistry.GetAllClients().ToList();
+            if (!devices.Any())
+            {
+                _reInitMessage = "No devices to re-initialize";
+                _reInitSuccess = false;
+                return;
+            }
+
+            Console.WriteLine($"[ReInit] Starting re-initialization of {devices.Count} devices...");
+
+            // Step 1: Send ping command to all devices to check connectivity
+            var respondingDevices = new List<string>();
+            var nonRespondingDevices = new List<string>();
+
+            foreach (var device in devices)
+            {
+                try
+                {
+                    Console.WriteLine($"[ReInit] Pinging {device.ClientId} at {device.RemoteIp}:{device.CommandPort}...");
+                    
+                    // Send an "identify" command asking the device to report its actual ClientId
+                    var identifyCommand = new DeviceCommand
+                    {
+                        CommandId = Guid.NewGuid().ToString(),
+                        Type = "identify",
+                        Payload = System.Text.Json.JsonSerializer.SerializeToElement(new { })
+                    };
+                    
+                    var result = await CommandService.SendCommandAsync(device.ClientId, identifyCommand);
+                    
+                    if (result != null && result.Success && result.Data != null)
+                    {
+                        // Check if the returned ClientId matches what we expected
+                        var dataElement = (System.Text.Json.JsonElement)result.Data;
+                        var actualClientId = dataElement.TryGetProperty("clientId", out var clientIdProp) 
+                            ? clientIdProp.GetString() 
+                            : null;
+                        
+                        if (actualClientId == device.ClientId)
+                        {
+                            Console.WriteLine($"[ReInit] ✅ {device.ClientId} responded correctly");
+                            respondingDevices.Add(device.ClientId);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[ReInit] ❌ {device.ClientId} responded but identified as '{actualClientId}' - REMOVING");
+                            nonRespondingDevices.Add(device.ClientId);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[ReInit] ❌ {device.ClientId} did not respond or returned error");
+                        nonRespondingDevices.Add(device.ClientId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ReInit] ❌ {device.ClientId} failed to respond: {ex.Message}");
+                    nonRespondingDevices.Add(device.ClientId);
+                }
+
+                StateHasChanged();
+            }
+
+            // Step 2: Remove non-responding devices from registry
+            foreach (var clientId in nonRespondingDevices)
+            {
+                ClientRegistry.RemoveClient(clientId);
+                Console.WriteLine($"[ReInit] Removed non-responding device: {clientId}");
+            }
+
+            // Step 3: Clear registry and force all responding devices to re-register
+            foreach (var clientId in respondingDevices)
+            {
+                ClientRegistry.RemoveClient(clientId);
+                Console.WriteLine($"[ReInit] Cleared {clientId} from registry - will re-register on next heartbeat");
+            }
+
+            _reInitMessage = $"✅ Re-initialization complete: {respondingDevices.Count} devices responding, {nonRespondingDevices.Count} removed";
+            _reInitSuccess = true;
+
+            Console.WriteLine($"[ReInit] Complete - {respondingDevices.Count} responding, {nonRespondingDevices.Count} removed");
+
+            // Reload devices after a short delay to show updated list
+            await Task.Delay(2000);
+            await LoadDevices();
+        }
+        catch (Exception ex)
+        {
+            _reInitMessage = $"❌ Re-initialization failed: {ex.Message}";
+            _reInitSuccess = false;
+            Console.WriteLine($"[ReInit] Error: {ex.Message}");
+        }
+        finally
+        {
+            _isReInitializing = false;
+            StateHasChanged();
+        }
     }
 
     public void Dispose()

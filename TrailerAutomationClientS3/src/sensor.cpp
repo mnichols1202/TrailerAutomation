@@ -55,12 +55,15 @@ bool sendSensorReading()
     logLine(String("Sensor reading: TempC=") + String(temperatureC, 2) +
             " Humidity=" + String(humidityPercent, 2));
 
+    // Get device configuration
+    const DeviceConfig& config = getDeviceConfig();
+
     // JSON payload must match TrailerAutomationClientNet:
     // { "ClientId": "...", "TemperatureC": 23.45, "HumidityPercent": 41.23 }
     String payload;
     payload.reserve(128);
     payload  = "{\"ClientId\":\"";
-    payload += CLIENT_ID;
+    payload += config.clientId;
     payload += "\",\"TemperatureC\":";
     payload += String(temperatureC, 2);
     payload += ",\"HumidityPercent\":";

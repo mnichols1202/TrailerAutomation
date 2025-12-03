@@ -4,22 +4,22 @@
     "Password": "J0shua07"
   },
   "Device": {
-    "ClientId": "esp32-s3-001",
+    "ClientId": "ESP32-S3-002",
     "DeviceType": "ESP32-S3",
-    "FriendlyName": "ESP32 Node 1",
+    "FriendlyName": "ESP32 Node 2",
     "CommandListenerPort": 8888
   },
   "Intervals": {
     "HeartbeatSeconds": 60,
     "SensorReadingSeconds": 30
   },
-  "Hardware": {
-    "Sensors": [
+    "Hardware": {
+    "Relays": [
       {
-        "Id": "sht31-main",
-        "Type": "SHT31",
-        "Name": "Temperature & Humidity",
-        "I2cAddress": "0x44",
+        "Id": "relay1",
+        "Name": "Relay 1",
+        "Pin": 4,
+        "InitialState": false,
         "Enabled": true
       }
     ]
