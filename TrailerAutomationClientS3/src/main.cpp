@@ -14,14 +14,13 @@
 
 // Timers for periodic tasks
 static unsigned long g_lastHeartbeatMs = 0;
-static unsigned long g_lastSensorMs    = 0;
+static unsigned long g_lastSensorMs[MAX_SENSORS] = {0};  // Per-sensor timing
 static unsigned long g_bootDelayStartMs = 0;
 static bool g_bootDelayComplete = false;
 bool g_deviceRegistered = false;  // Non-static so commandlistener can access
 
 // Intervals from config (will be loaded from SD card)
 static unsigned long g_heartbeatIntervalMs = 60000UL; // Default 60s
-static unsigned long g_sensorIntervalMs = 30000UL;    // Default 30s
 
 void setup()
 {
@@ -47,10 +46,10 @@ void setup()
         }
     }
     
-    // Load intervals from config
+    // Load heartbeat interval from config
     const DeviceConfig& config = getDeviceConfig();
     g_heartbeatIntervalMs = config.heartbeatSeconds * 1000UL;
-    g_sensorIntervalMs = config.sensorReadingSeconds * 1000UL;
+    // Sensor intervals are now per-sensor in config.sensors[].readingIntervalSeconds
     
     logLine("Starting 15-second boot delay for hardware initialization (battery-safe)...");
     
@@ -288,19 +287,35 @@ void loop()
         g_lastHeartbeatMs = now;
     }
 
-    // 7. Sensor timing (independent of heartbeat) - only if sensor is configured
-    if (isSensorAvailable() && now - g_lastSensorMs >= g_sensorIntervalMs)
+    // 7. Sensor timing (independent of heartbeat) - check each sensor independently
+    if (isSensorAvailable())
     {
-        if (!sendSensorReading())
+        const DeviceConfig& config = getDeviceConfig();
+        
+        for (int i = 0; i < config.sensorCount; i++)
         {
-            logLine("Sensor reading failed. Will keep trying.");
-            setLedError(ERROR_SENSOR_SEND);  // 3 red blinks - Sensor send failed
+            const SensorConfig& sensor = config.sensors[i];
+            
+            if (!sensor.enabled)
+                continue;
+                
+            unsigned long intervalMs = sensor.readingIntervalSeconds * 1000UL;
+            
+            if (now - g_lastSensorMs[i] >= intervalMs)
+            {
+                if (!sendSensorReading())
+                {
+                    logLine("[" + String(sensor.id) + "] Sensor reading failed. Will keep trying.");
+                    setLedError(ERROR_SENSOR_SEND);  // 3 red blinks - Sensor send failed
+                }
+                else
+                {
+                    logLine("[" + String(sensor.id) + "] Sensor reading sent");
+                    clearLedError();  // Clear error if sensor send succeeds
+                }
+                g_lastSensorMs[i] = now;
+            }
         }
-        else
-        {
-            clearLedError();  // Clear error if sensor send succeeds
-        }
-        g_lastSensorMs = now;
     }
 
     // 7. Small delay to avoid busy spin

@@ -170,8 +170,11 @@
     {
         await LoadDevices();
         
-        // Auto-refresh every 10 seconds for device status updates
-        // Physical button updates and web UI updates happen immediately through other mechanisms
+        // Subscribe to relay state change events for instant UI updates
+        // This fires when physical buttons are pressed or external API calls change relay state
+        ClientRegistry.OnRelayStateChanged += HandleRelayStateChanged;
+        
+        // Keep a slower timer (30s) only for heartbeat status updates (online/offline)
         _timer = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(async () =>
@@ -179,7 +182,18 @@
                 await LoadDevices();
                 StateHasChanged();
             });
-        }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+    
+    private async void HandleRelayStateChanged()
+    {
+        // Relay state changed (physical button press or external command)
+        // Update UI immediately
+        await InvokeAsync(async () =>
+        {
+            await LoadDevices();
+            StateHasChanged();
+        });
     }
 
     private Task LoadDevices()
@@ -397,6 +411,7 @@
 
     public void Dispose()
     {
+        ClientRegistry.OnRelayStateChanged -= HandleRelayStateChanged;
         _timer?.Dispose();
     }
 

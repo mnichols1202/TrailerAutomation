@@ -8,7 +8,6 @@
   },
   "Intervals": {
     "HeartbeatSeconds": 60,
-    "SensorReadingSeconds": 30,
     "CommandPollingSeconds": 3
   },
   "Gateway": {
@@ -35,7 +34,8 @@
         "Type": "SHT31",
         "Name": "Temperature & Humidity",
         "I2cAddress": "0x44",
-        "Enabled": true
+        "Enabled": true,
+        "ReadingIntervalSeconds": 300
       }
     ]
   }

@@ -77,7 +77,7 @@ bool initSdConfig()
     // Extract Intervals section
     JsonObject intervals = doc["Intervals"];
     g_deviceConfig.heartbeatSeconds = intervals["HeartbeatSeconds"] | 60;
-    g_deviceConfig.sensorReadingSeconds = intervals["SensorReadingSeconds"] | 30;
+    // SensorReadingSeconds removed - now per-sensor
     
     // Extract Hardware.Relays array
     JsonArray relays = doc["Hardware"]["Relays"];
@@ -132,6 +132,7 @@ bool initSdConfig()
             strncpy(s.name, sensor["Name"] | "Sensor", MAX_SENSOR_NAME_LEN - 1);
             strncpy(s.i2cAddress, sensor["I2cAddress"] | "0x44", MAX_SENSOR_I2C_ADDR_LEN - 1);
             s.enabled = sensor["Enabled"] | false;
+            s.readingIntervalSeconds = sensor["ReadingIntervalSeconds"] | 300;  // Default 5 minutes
             
             if (strlen(s.id) == 0 || strlen(s.type) == 0)
             {
@@ -152,7 +153,7 @@ bool initSdConfig()
     logLine("  Name: " + String(g_deviceConfig.friendlyName));
     logLine("  Command Port: " + String(g_deviceConfig.commandListenerPort));
     logLine("  Heartbeat: " + String(g_deviceConfig.heartbeatSeconds) + "s");
-    logLine("  Sensor: " + String(g_deviceConfig.sensorReadingSeconds) + "s");
+    logLine("  (Sensor intervals configured per-sensor below)");
     logLine("  Relays: " + String(g_deviceConfig.relayCount));
     
     for (int i = 0; i < g_deviceConfig.relayCount; i++)
@@ -171,7 +172,8 @@ bool initSdConfig()
         logLine("    [" + String(s.id) + "] " + String(s.type) + 
                 " - " + String(s.name) + 
                 " I2C:" + String(s.i2cAddress) +
-                " Enabled:" + String(s.enabled ? "YES" : "NO"));
+                " Enabled:" + String(s.enabled ? "YES" : "NO") +
+                " Interval:" + String(s.readingIntervalSeconds) + "s");
     }
     
     // Extract Hardware.Buttons array (optional)

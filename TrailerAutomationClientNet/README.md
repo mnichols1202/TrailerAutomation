@@ -12,9 +12,9 @@ The application uses `config.json` for all configuration. Copy `config.template.
 - **FriendlyName**: Human-readable name shown in the Gateway UI
 
 ### Intervals
-- **HeartbeatSeconds**: How often to send heartbeat to Gateway (default: 10)
-- **SensorReadingSeconds**: How often to read and report sensor data (default: 30)
-- **CommandPollingSeconds**: How often to check for commands from Gateway (default: 3)
+- **HeartbeatSeconds**: How often to send heartbeat to Gateway (default: 60, range: 5-600)
+- **CommandPollingSeconds**: How often to check for commands from Gateway (default: 3, range: 1-60)
+- **Note**: Sensor reading intervals are now configured per-sensor (see Sensors section below)
 
 ### Gateway Settings
 - **DiscoveryTimeoutSeconds**: How long to wait for mDNS discovery (default: 8)
@@ -39,7 +39,7 @@ Define GPIO-connected relays:
 - **InitialState**: true = ON at startup, false = OFF at startup
 
 #### Sensors
-Define I2C-connected sensors:
+Define I2C-connected sensors with individual reading intervals:
 ```json
 "Sensors": [
   {
@@ -47,7 +47,8 @@ Define I2C-connected sensors:
     "Type": "SHT31",
     "Name": "Temperature & Humidity",
     "I2cAddress": "0x44",
-    "Enabled": true
+    "Enabled": true,
+    "ReadingIntervalSeconds": 300
   }
 ]
 ```
@@ -56,6 +57,9 @@ Define I2C-connected sensors:
 - **Name**: Human-readable name
 - **I2cAddress**: I2C address of the sensor (typically 0x44 or 0x45 for SHT31)
 - **Enabled**: true = sensor active, false = sensor disabled
+- **ReadingIntervalSeconds**: How often to read this sensor (default: 300 = 5 minutes, range: 10-3600)
+  - Use longer intervals (300-600s) for slow-changing sensors like temperature
+  - Use shorter intervals (10-60s) for fast-changing sensors or critical monitoring
 
 ## Running
 

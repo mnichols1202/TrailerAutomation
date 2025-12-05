@@ -115,8 +115,6 @@ namespace TrailerAutomationClientNet
 
         private static async Task SensorLoopAsync(HttpClient http, System.Threading.CancellationToken cancellationToken)
         {
-            var sensorReportInterval = TimeSpan.FromSeconds(_config.Intervals.SensorReadingSeconds);
-            
             // Find enabled SHT31 sensors in configuration
             var sht31Sensors = _config.Hardware.Sensors
                 .Where(s => s.Type.Equals("SHT31", StringComparison.OrdinalIgnoreCase) && s.Enabled)
@@ -131,46 +129,58 @@ namespace TrailerAutomationClientNet
             Console.WriteLine($"[Sensor] Found {sht31Sensors.Count} enabled SHT31 sensor(s):");
             foreach (var sensor in sht31Sensors)
             {
-                Console.WriteLine($"  - [{sensor.Id}] {sensor.Name} at I2C {sensor.I2cAddress}");
+                Console.WriteLine($"  - [{sensor.Id}] {sensor.Name} at I2C {sensor.I2cAddress} - Interval: {sensor.ReadingIntervalSeconds}s");
             }
 
             try
             {
-                using var sensor = new Sht31Reader();
+                using var sensorReader = new Sht31Reader();
 
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    try
+                // Create independent tasks for each sensor with its own interval
+                var sensorTasks = sht31Sensors.Select(sensorConfig => 
+                    Task.Run(async () =>
                     {
-                        var (temperatureC, humidityPercent) = sensor.ReadMeasurement();
+                        var interval = TimeSpan.FromSeconds(sensorConfig.ReadingIntervalSeconds);
+                        Console.WriteLine($"[Sensor][{sensorConfig.Id}] Starting with {sensorConfig.ReadingIntervalSeconds}s interval");
 
-                        Console.WriteLine(
-                            $"[{DateTime.Now:T}] Local sensor reading: " +
-                            $"TempC={temperatureC:F2} Humidity={humidityPercent:F2}");
-
-                        var payload = new
+                        while (!cancellationToken.IsCancellationRequested)
                         {
-                            ClientId = _config.Device.ClientId,
-                            TemperatureC = temperatureC,
-                            HumidityPercent = humidityPercent
-                        };
+                            try
+                            {
+                                var (temperatureC, humidityPercent) = sensorReader.ReadMeasurement();
 
-                        string json = JsonSerializer.Serialize(payload);
-                        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                                Console.WriteLine(
+                                    $"[{DateTime.Now:T}][{sensorConfig.Id}] {sensorConfig.Name}: " +
+                                    $"TempC={temperatureC:F2} Humidity={humidityPercent:F2}");
 
-                        var response = await http.PostAsync("/api/sensor-readings", content);
-                        response.EnsureSuccessStatusCode();
+                                var payload = new
+                                {
+                                    ClientId = _config.Device.ClientId,
+                                    TemperatureC = temperatureC,
+                                    HumidityPercent = humidityPercent
+                                };
 
-                        string respBody = await response.Content.ReadAsStringAsync();
-                        Console.WriteLine($"[{DateTime.Now:T}] Sensor reading sent: {respBody}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[{DateTime.Now:T}] Sensor loop error: {ex.Message}");
-                    }
+                                string json = JsonSerializer.Serialize(payload);
+                                using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                    await Task.Delay(sensorReportInterval, cancellationToken);
-                }
+                                var response = await http.PostAsync("/api/sensor-readings", content);
+                                response.EnsureSuccessStatusCode();
+
+                                string respBody = await response.Content.ReadAsStringAsync();
+                                Console.WriteLine($"[{DateTime.Now:T}][{sensorConfig.Id}] Sensor reading sent: {respBody}");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[{DateTime.Now:T}][{sensorConfig.Id}] Sensor loop error: {ex.Message}");
+                            }
+
+                            await Task.Delay(interval, cancellationToken);
+                        }
+                    }, cancellationToken)
+                ).ToList();
+
+                // Wait for all sensor tasks to complete
+                await Task.WhenAll(sensorTasks);
             }
             catch (Exception ex)
             {

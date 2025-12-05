@@ -50,6 +50,7 @@ struct SensorConfig
     char name[MAX_SENSOR_NAME_LEN];
     char i2cAddress[MAX_SENSOR_I2C_ADDR_LEN];
     bool enabled;
+    int readingIntervalSeconds;  // Per-sensor interval (default 300 = 5 minutes)
 };
 
 // Device configuration structure
@@ -64,7 +65,7 @@ struct DeviceConfig
     int commandListenerPort;
     
     int heartbeatSeconds;
-    int sensorReadingSeconds;
+    // sensorReadingSeconds removed - now per-sensor in SensorConfig.readingIntervalSeconds
     
     RelayConfig relays[MAX_RELAYS];
     int relayCount;

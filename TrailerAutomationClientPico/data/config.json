@@ -10,8 +10,7 @@
     "CommandListenerPort": 8888
   },
   "Intervals": {
-    "HeartbeatSeconds": 60,
-    "SensorReadingSeconds": 30
+    "HeartbeatSeconds": 60
   },
   "Hardware": {
     "Relays": [
@@ -29,7 +28,8 @@
         "Name": "SHT31 Sensor",
         "Type": "SHT31",
         "I2cAddress": "0x44",
-        "Enabled": true
+        "Enabled": true,
+        "ReadingIntervalSeconds": 300
       }
     ]
   }

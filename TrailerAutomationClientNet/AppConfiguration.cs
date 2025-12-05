@@ -35,11 +35,10 @@ namespace TrailerAutomationClientNet
 
     public class IntervalsConfig
     {
-        [Range(5, 300, ErrorMessage = "HeartbeatSeconds must be between 5 and 300")]
-        public int HeartbeatSeconds { get; set; } = 10;
+        [Range(5, 600, ErrorMessage = "HeartbeatSeconds must be between 5 and 600")]
+        public int HeartbeatSeconds { get; set; } = 60;
         
-        [Range(10, 3600, ErrorMessage = "SensorReadingSeconds must be between 10 and 3600")]
-        public int SensorReadingSeconds { get; set; } = 30;
+        // SensorReadingSeconds removed - now configured per-sensor in Hardware.Sensors[].ReadingIntervalSeconds
         
         [Range(1, 60, ErrorMessage = "CommandPollingSeconds must be between 1 and 60")]
         public int CommandPollingSeconds { get; set; } = 3;
@@ -75,11 +74,24 @@ namespace TrailerAutomationClientNet
 
     public class SensorConfig
     {
+        [Required]
+        [StringLength(50)]
         public string Id { get; set; } = string.Empty;
+        
+        [Required]
+        [StringLength(50)]
         public string Type { get; set; } = string.Empty;
+        
+        [Required]
+        [StringLength(100)]
         public string Name { get; set; } = string.Empty;
+        
         public string I2cAddress { get; set; } = string.Empty;
+        
         public bool Enabled { get; set; } = true;
+        
+        [Range(10, 3600, ErrorMessage = "ReadingIntervalSeconds must be between 10 and 3600")]
+        public int ReadingIntervalSeconds { get; set; } = 300; // Default 5 minutes for slow-changing sensors
     }
 
     public class ButtonConfig

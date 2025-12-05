@@ -65,14 +65,18 @@ namespace TrailerAutomationClientNet
                 throw new InvalidOperationException("Intervals.HeartbeatSeconds must be positive.");
             }
 
-            if (config.Intervals.SensorReadingSeconds <= 0)
-            {
-                throw new InvalidOperationException("Intervals.SensorReadingSeconds must be positive.");
-            }
-
             if (config.Intervals.CommandPollingSeconds <= 0)
             {
                 throw new InvalidOperationException("Intervals.CommandPollingSeconds must be positive.");
+            }
+            
+            // Validate per-sensor intervals
+            foreach (var sensor in config.Hardware.Sensors)
+            {
+                if (sensor.Enabled && sensor.ReadingIntervalSeconds <= 0)
+                {
+                    throw new InvalidOperationException($"Sensor '{sensor.Id}' has invalid ReadingIntervalSeconds. Must be positive.");
+                }
             }
 
             // Validate Gateway
@@ -122,8 +126,8 @@ namespace TrailerAutomationClientNet
 
             Console.WriteLine($"Intervals:");
             Console.WriteLine($"  Heartbeat: {config.Intervals.HeartbeatSeconds}s");
-            Console.WriteLine($"  Sensor Reading: {config.Intervals.SensorReadingSeconds}s");
             Console.WriteLine($"  Command Polling: {config.Intervals.CommandPollingSeconds}s");
+            Console.WriteLine($"  (Sensor intervals configured per-sensor below)");
             Console.WriteLine();
 
             Console.WriteLine($"Gateway:");
@@ -145,7 +149,20 @@ namespace TrailerAutomationClientNet
                 Console.WriteLine($"Sensors ({config.Hardware.Sensors.Count}):");
                 foreach (var sensor in config.Hardware.Sensors)
                 {
-                    Console.WriteLine($"  [{sensor.Id}] {sensor.Name} - Type: {sensor.Type}, I2C: {sensor.I2cAddress}, Enabled: {sensor.Enabled}");
+                    var intervalStr = sensor.ReadingIntervalSeconds > 0 
+                        ? $"{sensor.ReadingIntervalSeconds}s" 
+                        : "300s (default)";
+                    Console.WriteLine($"  [{sensor.Id}] {sensor.Name} - Type: {sensor.Type}, I2C: {sensor.I2cAddress}, Enabled: {sensor.Enabled}, Interval: {intervalStr}");
+                }
+                Console.WriteLine();
+            }
+            
+            if (config.Hardware.Buttons.Count > 0)
+            {
+                Console.WriteLine($"Buttons ({config.Hardware.Buttons.Count}):");
+                foreach (var button in config.Hardware.Buttons)
+                {
+                    Console.WriteLine($"  [{button.Id}] {button.Name} - Pin: {button.Pin}, Target: {button.TargetDevice}:{button.TargetRelay}, Enabled: {button.Enabled}");
                 }
                 Console.WriteLine();
             }

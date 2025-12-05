@@ -10,10 +10,9 @@
     "CommandListenerPort": 8888
   },
   "Intervals": {
-    "HeartbeatSeconds": 60,
-    "SensorReadingSeconds": 30
+    "HeartbeatSeconds": 60
   },
-    "Hardware": {
+  "Hardware": {
     "Relays": [
       {
         "Id": "relay1",
@@ -21,6 +20,16 @@
         "Pin": 4,
         "InitialState": false,
         "Enabled": true
+      }
+    ],
+    "Sensors": [
+      {
+        "Id": "sht31-main",
+        "Type": "SHT31",
+        "Name": "Temperature & Humidity",
+        "I2cAddress": "0x44",
+        "Enabled": true,
+        "ReadingIntervalSeconds": 300
       }
     ]
   }

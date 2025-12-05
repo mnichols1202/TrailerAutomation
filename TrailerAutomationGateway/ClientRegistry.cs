@@ -13,6 +13,9 @@ namespace TrailerAutomationGateway
     {
         private readonly object _sync = new();
         private readonly Dictionary<string, ClientInfo> _clients = new();
+        
+        // Event fired when relay state changes - allows Blazor pages to update instantly
+        public static event Action? OnRelayStateChanged;
 
         // Heartbeat config
         private readonly TimeSpan _heartbeatInterval;
@@ -257,6 +260,9 @@ namespace TrailerAutomationGateway
                     Console.WriteLine($"[ClientRegistry][RELAY_STATE] {clientId}/{relayId} = {state}");
                 }
             }
+            
+            // Notify all subscribed Blazor components to refresh immediately
+            OnRelayStateChanged?.Invoke();
         }
     }
 }
