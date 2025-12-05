@@ -292,6 +292,19 @@ bool registerDevice()
         capabilities.add("relay");
     }
     
+    // Add button capability if buttons are configured
+    if (config.buttonCount > 0)
+    {
+        for (int i = 0; i < config.buttonCount; i++)
+        {
+            if (config.buttons[i].enabled)
+            {
+                capabilities.add("button");
+                break; // Only add once
+            }
+        }
+    }
+    
     // Only add sensor capabilities if sensors are configured and available
     if (config.sensorCount > 0)
     {

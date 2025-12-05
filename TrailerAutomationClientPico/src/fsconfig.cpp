@@ -143,6 +143,40 @@ bool initFsConfig()
         }
     }
     
+    // Extract Hardware.Buttons array
+    JsonArray buttons = doc["Hardware"]["Buttons"];
+    g_deviceConfig.buttonCount = 0;
+    
+    if (buttons)
+    {
+        for (JsonObject button : buttons)
+        {
+            if (g_deviceConfig.buttonCount >= MAX_BUTTONS)
+            {
+                logLine("WARNING: More than " + String(MAX_BUTTONS) + " buttons in config, ignoring extras");
+                break;
+            }
+            
+            ButtonConfig& b = g_deviceConfig.buttons[g_deviceConfig.buttonCount];
+            
+            strncpy(b.id, button["Id"] | "", MAX_RELAY_ID_LEN - 1);
+            strncpy(b.name, button["Name"] | "Button", MAX_RELAY_NAME_LEN - 1);
+            b.pin = button["Pin"] | -1;
+            strncpy(b.targetDevice, button["TargetDevice"] | "", MAX_DEVICE_ID_LEN - 1);
+            strncpy(b.targetRelay, button["TargetRelay"] | "", MAX_RELAY_ID_LEN - 1);
+            b.enabled = button["Enabled"] | false;
+            
+            if (b.pin >= 0 && strlen(b.targetDevice) > 0 && strlen(b.targetRelay) > 0 && b.enabled)
+            {
+                g_deviceConfig.buttonCount++;
+            }
+            else
+            {
+                logLine("WARNING: Skipping invalid button config: " + String(b.name));
+            }
+        }
+    }
+    
     // Log loaded configuration
     logLine("Configuration loaded successfully:");
     logLine("  WiFi SSID: " + String(g_deviceConfig.wifiSSID));
@@ -172,6 +206,16 @@ bool initFsConfig()
                 " - " + String(s.name) + 
                 " I2C:" + String(s.i2cAddress) +
                 " Enabled:" + String(s.enabled ? "YES" : "NO"));
+    }
+    
+    logLine("  Buttons: " + String(g_deviceConfig.buttonCount));
+    
+    for (int i = 0; i < g_deviceConfig.buttonCount; i++)
+    {
+        ButtonConfig& b = g_deviceConfig.buttons[i];
+        logLine("    [" + String(b.id) + "] " + String(b.name) + 
+                " - Pin:" + String(b.pin) + 
+                " Target:" + String(b.targetDevice) + ":" + String(b.targetRelay));
     }
     
     g_configLoaded = true;

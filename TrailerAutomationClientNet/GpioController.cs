@@ -41,6 +41,7 @@ namespace TrailerAutomationClientNet
                 }
 
                 Console.WriteLine($"[GPIO] Initialized {_relayPins.Count} relay pin(s)");
+                Console.WriteLine($"[GPIO] Available relays: {string.Join(", ", _relayPins.Keys)}");
             }
             catch (Exception ex)
             {

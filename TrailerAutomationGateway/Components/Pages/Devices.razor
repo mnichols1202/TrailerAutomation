@@ -91,8 +91,9 @@
                                 {
                                     var relayIdCopy = relay.Id;
                                     var relayNameCopy = relay.Name;
-                                    var relayStateKey = $"{deviceIdCopy}_{relayIdCopy}";
-                                    var isOn = _relayStates.GetValueOrDefault(relayStateKey, false);
+                                    // Get relay state from device registry instead of local tracking
+                                    var stateStr = device.RelayStates.GetValueOrDefault(relayIdCopy, "off");
+                                    var isOn = stateStr == "on";
                                     <button class="refresh-btn" 
                                             style="margin-right: 5px; background: @(isOn ? "#28a745" : "#6c757d"); color: white;" 
                                             @onclick="@(async () => await ToggleRelay(deviceIdCopy, relayIdCopy, relayNameCopy))"
@@ -160,7 +161,6 @@
 @code {
     private List<DeviceInfo> _devices = new();
     private Dictionary<string, CommandResult> _commandResults = new();
-    private Dictionary<string, bool> _relayStates = new();
     private System.Threading.Timer? _timer;
     private bool _isReInitializing = false;
     private string _reInitMessage = string.Empty;
@@ -170,7 +170,7 @@
     {
         await LoadDevices();
         
-        // Auto-refresh every 15 seconds
+        // Auto-refresh every 5 seconds (balanced between responsiveness and load)
         _timer = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(async () =>
@@ -178,7 +178,7 @@
                 await LoadDevices();
                 StateHasChanged();
             });
-        }, null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
 
     private Task LoadDevices()
@@ -196,7 +196,8 @@
                 LastHeartbeatUtc = c.LastHeartbeatUtc,
                 CommandPort = c.CommandPort,
                 Capabilities = c.Capabilities?.ToArray() ?? Array.Empty<string>(),
-                Relays = c.Relays?.Select(r => new RelayInfo { Id = r.Id, Name = r.Name }).ToArray()
+                Relays = c.Relays?.Select(r => new RelayInfo { Id = r.Id, Name = r.Name }).ToArray(),
+                RelayStates = new Dictionary<string, string>(c.RelayStates)
             }).ToList();
         }
         catch (Exception ex)
@@ -211,24 +212,26 @@
     {
         try
         {
-            var relayStateKey = $"{deviceId}_{relayId}";
-            var currentState = _relayStates.GetValueOrDefault(relayStateKey, false);
-            var newState = !currentState;
-            var stateStr = newState ? "on" : "off";
+            // Get current state from registry
+            var device = ClientRegistry.GetClient(deviceId);
+            var currentState = device?.RelayStates.GetValueOrDefault(relayId, "off") ?? "off";
+            var newState = currentState == "on" ? "off" : "on";
             
             // Clear previous result for this device
             _commandResults.Remove(deviceId);
             
-            var result = await CommandService.SendSetRelayCommandAsync(deviceId, relayId, stateStr);
+            var result = await CommandService.SendSetRelayCommandAsync(deviceId, relayId, newState);
             
             if (result != null)
             {
                 _commandResults[deviceId] = result;
                 
-                // Update state only if successful
+                // Update state in registry if successful
                 if (result.Success)
                 {
-                    _relayStates[relayStateKey] = newState;
+                    ClientRegistry.UpdateRelayState(deviceId, relayId, newState);
+                    // Reload devices to pick up the updated state
+                    await LoadDevices();
                 }
             }
             
@@ -408,6 +411,7 @@
         public int CommandPort { get; set; }
         public string[] Capabilities { get; set; } = Array.Empty<string>();
         public RelayInfo[]? Relays { get; set; }
+        public Dictionary<string, string> RelayStates { get; set; } = new();
         
         // Properties for backwards compatibility with existing code
         public string DeviceId => ClientId;

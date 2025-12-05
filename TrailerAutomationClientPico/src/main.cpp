@@ -9,6 +9,7 @@
 #include "fsconfig.h"
 #include "relaycontrol.h"
 #include "commandlistener.h"
+#include "button.h"
 
 // Timers for periodic tasks
 static unsigned long g_lastHeartbeatMs = 0;
@@ -68,6 +69,12 @@ void setup()
     if (!initRelayControl())
     {
         logLine("WARNING: Relay control initialization failed");
+    }
+    
+    // Initialize button control from config
+    if (!initButtons())
+    {
+        logLine("WARNING: Button initialization failed");
     }
     
     // Note: WiFi connection will happen in loop() after boot delay
@@ -218,10 +225,13 @@ void loop()
         }
     }
 
-    // 4. Process incoming commands (non-blocking)
+    // 4. Check buttons (non-blocking)
+    checkButtons();
+
+    // 5. Process incoming commands (non-blocking)
     processCommandListener();
 
-    // 5. Heartbeat timing
+    // 6. Heartbeat timing
     if (now - g_lastHeartbeatMs >= g_heartbeatIntervalMs)
     {
         // sendHeartbeat() returns true if gateway requests re-registration
@@ -260,7 +270,7 @@ void loop()
         g_lastHeartbeatMs = now;
     }
 
-    // 6. Sensor timing (independent of heartbeat) - only if sensor is configured
+    // 7. Sensor timing (independent of heartbeat) - only if sensor is configured
     if (isSensorAvailable() && now - g_lastSensorMs >= g_sensorIntervalMs)
     {
         if (!sendSensorReading())
@@ -275,6 +285,6 @@ void loop()
         g_lastSensorMs = now;
     }
 
-    // 7. Small delay to avoid busy spin
+    // 8. Small delay to avoid busy spin
     delay(10);
 }

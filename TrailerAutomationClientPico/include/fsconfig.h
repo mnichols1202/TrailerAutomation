@@ -15,8 +15,20 @@
 #define MAX_SENSOR_NAME_LEN 32
 #define MAX_SENSOR_I2C_ADDR_LEN 8
 #define MAX_SENSORS 4
+#define MAX_BUTTONS 8
 #define MAX_WIFI_SSID_LEN 32
 #define MAX_WIFI_PASSWORD_LEN 64
+
+// Button configuration structure
+struct ButtonConfig
+{
+    char id[MAX_RELAY_ID_LEN];
+    char name[MAX_RELAY_NAME_LEN];
+    int pin;
+    char targetDevice[MAX_DEVICE_ID_LEN];
+    char targetRelay[MAX_RELAY_ID_LEN];
+    bool enabled;
+};
 
 // Relay configuration structure
 struct RelayConfig
@@ -57,6 +69,9 @@ struct DeviceConfig
     
     SensorConfig sensors[MAX_SENSORS];
     int sensorCount;
+    
+    ButtonConfig buttons[MAX_BUTTONS];
+    int buttonCount;
 };
 
 /**

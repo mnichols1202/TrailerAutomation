@@ -38,6 +38,7 @@ namespace TrailerAutomationClientNet
     {
         public List<RelayConfig> Relays { get; set; } = new();
         public List<SensorConfig> Sensors { get; set; } = new();
+        public List<ButtonConfig> Buttons { get; set; } = new();
     }
 
     public class RelayConfig
@@ -54,6 +55,16 @@ namespace TrailerAutomationClientNet
         public string Type { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string I2cAddress { get; set; } = string.Empty;
+        public bool Enabled { get; set; } = true;
+    }
+
+    public class ButtonConfig
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public int Pin { get; set; }
+        public string TargetDevice { get; set; } = string.Empty;
+        public string TargetRelay { get; set; } = string.Empty;
         public bool Enabled { get; set; } = true;
     }
 }

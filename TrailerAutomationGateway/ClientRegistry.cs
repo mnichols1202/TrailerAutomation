@@ -243,5 +243,20 @@ namespace TrailerAutomationGateway
                 return false;
             }
         }
+
+        /// <summary>
+        /// Update relay state for a client.
+        /// </summary>
+        public void UpdateRelayState(string clientId, string relayId, string state)
+        {
+            lock (_sync)
+            {
+                if (_clients.TryGetValue(clientId, out var info))
+                {
+                    info.RelayStates[relayId] = state;
+                    Console.WriteLine($"[ClientRegistry][RELAY_STATE] {clientId}/{relayId} = {state}");
+                }
+            }
+        }
     }
 }

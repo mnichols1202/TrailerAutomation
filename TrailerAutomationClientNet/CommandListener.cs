@@ -16,12 +16,14 @@ namespace TrailerAutomationClientNet
     {
         private readonly AppConfiguration _config;
         private readonly GpioRelayController _gpioController;
+        private readonly ButtonController? _buttonController;
         private TcpListener? _listener;
 
-        public CommandListener(AppConfiguration config, GpioRelayController gpioController)
+        public CommandListener(AppConfiguration config, GpioRelayController gpioController, ButtonController? buttonController = null)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _gpioController = gpioController ?? throw new ArgumentNullException(nameof(gpioController));
+            _buttonController = buttonController;
         }
 
         /// <summary>
@@ -262,6 +264,12 @@ namespace TrailerAutomationClientNet
 
                 // Control GPIO pin
                 bool success = _gpioController.SetRelay(relayId, state);
+
+                // Sync button state tracking
+                if (success)
+                {
+                    _buttonController?.SyncRelayState(relayId, state);
+                }
 
                 if (!success)
                 {

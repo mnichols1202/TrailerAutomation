@@ -174,6 +174,49 @@ bool initSdConfig()
                 " Enabled:" + String(s.enabled ? "YES" : "NO"));
     }
     
+    // Extract Hardware.Buttons array (optional)
+    g_deviceConfig.buttonCount = 0;
+    JsonArray buttons = doc["Hardware"]["Buttons"];
+    
+    if (buttons)
+    {
+        for (JsonObject button : buttons)
+        {
+            if (g_deviceConfig.buttonCount >= MAX_BUTTONS)
+            {
+                logLine("WARNING: More than " + String(MAX_BUTTONS) + " buttons in config, ignoring extras");
+                break;
+            }
+            
+            ButtonConfig& b = g_deviceConfig.buttons[g_deviceConfig.buttonCount];
+            
+            strncpy(b.id, button["Id"] | "", MAX_BUTTON_ID_LEN - 1);
+            strncpy(b.name, button["Name"] | "Button", MAX_BUTTON_NAME_LEN - 1);
+            b.pin = button["Pin"] | -1;
+            strncpy(b.targetDevice, button["TargetDevice"] | "", MAX_DEVICE_ID_LEN - 1);
+            strncpy(b.targetRelay, button["TargetRelay"] | "", MAX_RELAY_ID_LEN - 1);
+            b.enabled = button["Enabled"] | true;
+            
+            if (b.pin < 0 || strlen(b.id) == 0 || strlen(b.targetDevice) == 0 || strlen(b.targetRelay) == 0)
+            {
+                logLine("WARNING: Invalid button config at index " + String(g_deviceConfig.buttonCount));
+                continue;
+            }
+            
+            g_deviceConfig.buttonCount++;
+        }
+    }
+    
+    logLine("  Buttons: " + String(g_deviceConfig.buttonCount));
+    
+    for (int i = 0; i < g_deviceConfig.buttonCount; i++)
+    {
+        ButtonConfig& b = g_deviceConfig.buttons[i];
+        logLine("    [" + String(b.id) + "] " + String(b.name) + 
+                " - Pin:" + String(b.pin) + 
+                " Target:" + String(b.targetDevice) + ":" + String(b.targetRelay));
+    }
+    
     g_configLoaded = true;
     return true;
 }

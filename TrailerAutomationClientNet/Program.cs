@@ -67,9 +67,14 @@ namespace TrailerAutomationClientNet
             Console.WriteLine("Initializing GPIO controller...");
             using var gpioController = new GpioRelayController(_config);
 
+            // Initialize button controller for physical button support
+            Console.WriteLine("Initializing button controller...");
+            using var buttonController = new ButtonController(_config, gpioController, http);
+            buttonController.StartMonitoring();
+
             // Start TCP command listener
             Console.WriteLine($"Starting command listener on port {_config.Device.CommandListenerPort}...");
-            var commandListener = new CommandListener(_config, gpioController);
+            var commandListener = new CommandListener(_config, gpioController, buttonController);
             var listenerTask = Task.Run(() => commandListener.RunAsync(cts.Token), cts.Token);
 
             // Send initial heartbeat immediately to establish presence
@@ -237,6 +242,10 @@ namespace TrailerAutomationClientNet
                 {
                     capabilities.Add("temp");
                     capabilities.Add("humidity");
+                }
+                if (_config.Hardware.Buttons.Any(b => b.Enabled))
+                {
+                    capabilities.Add("button");
                 }
 
                 // Build relay info list (Id and Name only for UI)

@@ -181,6 +181,48 @@ void processCommandListener()
         rp2040.reboot();
         return;  // Never reached
     }
+    else if (strcmp(commandType, "getRelayState") == 0)
+    {
+        // Get relay state
+        JsonObject payload = cmdDoc["payload"];
+        
+        if (!payload)
+        {
+            respDoc["success"] = false;
+            respDoc["message"] = "Missing payload";
+            respDoc["errorCode"] = "MISSING_PAYLOAD";
+        }
+        else
+        {
+            const char* relayId = payload["relayId"];
+            
+            if (!relayId)
+            {
+                respDoc["success"] = false;
+                respDoc["message"] = "Invalid payload: relayId required";
+                respDoc["errorCode"] = "INVALID_PAYLOAD";
+            }
+            else
+            {
+                bool state = false;
+                if (getRelayState(relayId, &state))
+                {
+                    respDoc["success"] = true;
+                    respDoc["message"] = String("Relay '") + relayId + "' state retrieved";
+                    
+                    JsonObject data = respDoc["data"].to<JsonObject>();
+                    data["relayId"] = relayId;
+                    data["state"] = state ? "on" : "off";
+                }
+                else
+                {
+                    respDoc["success"] = false;
+                    respDoc["message"] = String("Failed to get state for relay '") + relayId + "'";
+                    respDoc["errorCode"] = "RELAY_ERROR";
+                }
+            }
+        }
+    }
     else if (strcmp(commandType, "setRelay") == 0)
     {
         // Extract payload

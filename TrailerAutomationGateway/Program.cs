@@ -218,6 +218,85 @@ app.MapPost("/api/devices/{clientId}/commands/setRelay", async (
 .WithName("SendSetRelayCommand")
 .WithOpenApi();
 
+// Toggle relay (for button control)
+app.MapPost("/api/devices/{clientId}/relays/{relayId}/toggle", async (
+    string clientId,
+    string relayId,
+    DeviceCommandService commandService) =>
+{
+    Console.WriteLine(
+        $"[Device] POST /api/devices/{clientId}/relays/{relayId}/toggle {DateTime.UtcNow:O}");
+
+    // Send getRelayState command to device
+    var getStateCommand = new DeviceCommand
+    {
+        CommandId = Guid.NewGuid().ToString(),
+        Type = "getRelayState",
+        Payload = System.Text.Json.JsonSerializer.SerializeToElement(new { relayId = relayId })
+    };
+    
+    var stateResult = await commandService.SendCommandAsync(clientId, getStateCommand);
+    
+    if (stateResult == null || !stateResult.Success)
+    {
+        return Results.BadRequest(new { success = false, message = "Failed to get relay state" });
+    }
+    
+    // Parse current state from response
+    var dataElement = (System.Text.Json.JsonElement)stateResult.Data;
+    var currentState = dataElement.TryGetProperty("state", out var stateProp) 
+        ? stateProp.GetString() 
+        : "off";
+    
+    // Toggle to opposite state
+    string newState = (currentState == "on") ? "off" : "on";
+    
+    Console.WriteLine($"[Device] Toggling relay {relayId}: {currentState} -> {newState}");
+    
+    var result = await commandService.SendSetRelayCommandAsync(clientId, relayId, newState);
+
+    if (result.Success)
+    {
+        return Results.Ok(result);
+    }
+    else
+    {
+        return Results.BadRequest(result);
+    }
+})
+.WithName("ToggleRelay")
+.WithOpenApi();
+
+// Receive relay state notification from client (when local button changes relay state)
+app.MapPost("/api/devices/{clientId}/relays/{relayId}/state", (
+    string clientId,
+    string relayId,
+    string state,
+    ClientRegistry clientRegistry,
+    HttpContext httpContext) =>
+{
+    var remoteIp = httpContext.Connection.RemoteIpAddress?.ToString();
+    
+    Console.WriteLine(
+        $"[RelayState] POST /api/devices/{clientId}/relays/{relayId}/state {DateTime.UtcNow:O} " +
+        $"State={state} " +
+        $"RemoteIP={remoteIp ?? "n/a"}");
+    
+    // Update relay state in registry for UI synchronization
+    clientRegistry.UpdateRelayState(clientId, relayId, state);
+    
+    return Results.Ok(new
+    {
+        status = "OK",
+        clientId = clientId,
+        relayId = relayId,
+        state = state,
+        timestampUtc = DateTime.UtcNow
+    });
+})
+.WithName("NotifyRelayState")
+.WithOpenApi();
+
 // Receive temperature and humidity readings from a client
 app.MapPost("/api/sensor-readings", (SensorReadingRequest request, HttpContext httpContext, SensorReadingRegistry registry) =>
 {

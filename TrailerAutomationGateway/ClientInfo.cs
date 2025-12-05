@@ -16,6 +16,9 @@
         public int CommandPort { get; set; }
         public string[] Capabilities { get; set; } = Array.Empty<string>();
         public RelayInfo[]? Relays { get; set; }
+        
+        // Relay state tracking (key = relayId, value = "on" or "off")
+        public Dictionary<string, string> RelayStates { get; set; } = new();
 
         public ClientInfo Clone()
         {
@@ -29,7 +32,8 @@
                 LastHeartbeatUtc = LastHeartbeatUtc,
                 CommandPort = CommandPort,
                 Capabilities = (string[])Capabilities.Clone(),
-                Relays = Relays != null ? (RelayInfo[])Relays.Clone() : null
+                Relays = Relays != null ? (RelayInfo[])Relays.Clone() : null,
+                RelayStates = new Dictionary<string, string>(RelayStates)
             };
         }
     }
