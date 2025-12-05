@@ -2,6 +2,9 @@
 
 #include <cstdint>
 
+// Debug logging - set to 0 for production to reduce Serial overhead and save flash/CPU
+#define DEBUG_LOGGING 1
+
 // NOTE: WiFi credentials, ClientId, DeviceType, FriendlyName, and intervals
 // are now loaded from config.json on LittleFS filesystem.
 // Use 'pio run --target uploadfs' to upload the data/config.json file.

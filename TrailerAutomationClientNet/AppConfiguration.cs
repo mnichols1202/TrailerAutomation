@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TrailerAutomationClientNet
 {
@@ -16,16 +17,31 @@ namespace TrailerAutomationClientNet
 
     public class DeviceConfig
     {
+        [Required(ErrorMessage = "ClientId is required")]
+        [StringLength(50, MinimumLength = 1, ErrorMessage = "ClientId must be 1-50 characters")]
         public string ClientId { get; set; } = Environment.MachineName;
+        
+        [Required]
+        [StringLength(50)]
         public string DeviceType { get; set; } = "Unknown";
+        
+        [Required]
+        [StringLength(100)]
         public string FriendlyName { get; set; } = "Unnamed Device";
+        
+        [Range(1, 65535, ErrorMessage = "CommandListenerPort must be between 1 and 65535")]
         public int CommandListenerPort { get; set; } = 8888;
     }
 
     public class IntervalsConfig
     {
+        [Range(5, 300, ErrorMessage = "HeartbeatSeconds must be between 5 and 300")]
         public int HeartbeatSeconds { get; set; } = 10;
+        
+        [Range(10, 3600, ErrorMessage = "SensorReadingSeconds must be between 10 and 3600")]
         public int SensorReadingSeconds { get; set; } = 30;
+        
+        [Range(1, 60, ErrorMessage = "CommandPollingSeconds must be between 1 and 60")]
         public int CommandPollingSeconds { get; set; } = 3;
     }
 
@@ -43,9 +59,17 @@ namespace TrailerAutomationClientNet
 
     public class RelayConfig
     {
+        [Required]
+        [StringLength(50)]
         public string Id { get; set; } = string.Empty;
+        
+        [Required]
+        [StringLength(100)]
         public string Name { get; set; } = string.Empty;
+        
+        [Range(0, 100, ErrorMessage = "Pin must be a valid GPIO pin number")]
         public int Pin { get; set; }
+        
         public bool InitialState { get; set; } = false;
     }
 
@@ -60,11 +84,25 @@ namespace TrailerAutomationClientNet
 
     public class ButtonConfig
     {
+        [Required]
+        [StringLength(50)]
         public string Id { get; set; } = string.Empty;
+        
+        [Required]
+        [StringLength(100)]
         public string Name { get; set; } = string.Empty;
+        
+        [Range(0, 100, ErrorMessage = "Pin must be a valid GPIO pin number")]
         public int Pin { get; set; }
+        
+        [Required]
+        [StringLength(50)]
         public string TargetDevice { get; set; } = string.Empty;
+        
+        [Required]
+        [StringLength(50)]
         public string TargetRelay { get; set; } = string.Empty;
+        
         public bool Enabled { get; set; } = true;
     }
 }

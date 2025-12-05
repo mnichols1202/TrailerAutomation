@@ -170,7 +170,8 @@
     {
         await LoadDevices();
         
-        // Auto-refresh every 5 seconds (balanced between responsiveness and load)
+        // Auto-refresh every 10 seconds for device status updates
+        // Physical button updates and web UI updates happen immediately through other mechanisms
         _timer = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(async () =>
@@ -178,7 +179,7 @@
                 await LoadDevices();
                 StateHasChanged();
             });
-        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
     }
 
     private Task LoadDevices()

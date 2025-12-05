@@ -1,5 +1,8 @@
 #pragma once
 
+// Debug logging - set to 0 for production to reduce Serial overhead and save flash/CPU
+#define DEBUG_LOGGING 1
+
 // Gateway configuration
 #define GATEWAY_DEFAULT_PORT 5000
 

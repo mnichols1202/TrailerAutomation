@@ -110,13 +110,17 @@ bool ensureWifiConnected()
         while (WiFi.status() != WL_CONNECTED && (millis() - start) < timeoutMs)
         {
             delay(500);
+#if DEBUG_LOGGING
             Serial.print(".");
+#endif
             
             // Log status changes
             int currentStatus = WiFi.status();
             if (currentStatus != lastStatus)
             {
+#if DEBUG_LOGGING
                 Serial.println();
+#endif
                 logLine("  Status changed to: " + String(currentStatus) + " [" + getWiFiStatusString(currentStatus) + "]");
                 lastStatus = currentStatus;
             }

@@ -82,7 +82,7 @@ namespace TrailerAutomationGateway
 
                 var connectTask = tcpClient.ConnectAsync(client.RemoteIp, client.CommandPort);
                 
-                if (await Task.WhenAny(connectTask, Task.Delay(ConnectionTimeoutMs)) != connectTask)
+                if (await Task.WhenAny(connectTask, Task.Delay(ConnectionTimeoutMs)).ConfigureAwait(false) != connectTask)
                 {
                     Console.WriteLine($"[DeviceCommand] Connection timeout to {client.RemoteIp}:{client.CommandPort}");
                     return CommandResult.ErrorResult(
@@ -90,7 +90,7 @@ namespace TrailerAutomationGateway
                         "CONNECTION_TIMEOUT");
                 }
 
-                await connectTask; // Propagate any exceptions
+                await connectTask.ConfigureAwait(false); // Propagate any exceptions
 
                 Console.WriteLine($"[DeviceCommand] Connected to {client.RemoteIp}:{client.CommandPort}");
 

@@ -1,7 +1,13 @@
 using Microsoft.OpenApi.Models;
 using TrailerAutomationGateway;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure logging
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 
 // Fixed HTTP port for the gateway
 const int gatewayPort = 5000;
@@ -13,8 +19,23 @@ builder.Services.AddSingleton(new ClientRegistry(TimeSpan.FromSeconds(60), maxMi
 builder.Services.AddSingleton<SensorReadingRepository>();  // LiteDB persistence
 builder.Services.AddSingleton<SensorReadingRegistry>();    // sensor registry
 builder.Services.AddScoped<DeviceCommandService>();        // device command service
-builder.Services.AddHttpClient();                          // HttpClient for Blazor components
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri($"http://localhost:{gatewayPort}") });
+// HttpClient for Blazor components with connection pooling
+builder.Services.AddHttpClient("DeviceClient", client =>
+{
+    client.BaseAddress = new Uri($"http://localhost:{gatewayPort}");
+    client.Timeout = TimeSpan.FromSeconds(10);
+})
+.SetHandlerLifetime(TimeSpan.FromMinutes(5))  // Connection pooling
+.ConfigureHttpMessageHandlerBuilder(builder =>
+{
+    builder.PrimaryHandler = new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+        MaxConnectionsPerServer = 10
+    };
+});
+builder.Services.AddScoped<HttpClient>(sp => 
+    sp.GetRequiredService<IHttpClientFactory>().CreateClient("DeviceClient"));
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddEndpointsApiExplorer();
@@ -68,16 +89,16 @@ app.MapGet("/api/heartbeat", () =>
 .WithOpenApi();
 
 // POST heartbeat: client identifies itself here
-app.MapPost("/api/heartbeat", (HeartbeatRequest request, HttpContext httpContext, ClientRegistry registry) =>
+app.MapPost("/api/heartbeat", (HeartbeatRequest request, HttpContext httpContext, ClientRegistry registry, ILogger<Program> logger) =>
 {
     var remoteIp = httpContext.Connection.RemoteIpAddress?.ToString();
 
-    Console.WriteLine(
-        $"[Gateway] POST /api/heartbeat {DateTime.UtcNow:O} " +
-        $"ClientId={request.ClientId} " +
-        $"Type={request.DeviceType ?? "n/a"} " +
-        $"Name={request.FriendlyName ?? "n/a"} " +
-        $"RemoteIP={remoteIp ?? "n/a"}");
+    logger.LogInformation(
+        "[Gateway] POST /api/heartbeat ClientId={ClientId} Type={DeviceType} Name={FriendlyName} RemoteIP={RemoteIp}",
+        request.ClientId,
+        request.DeviceType ?? "n/a",
+        request.FriendlyName ?? "n/a",
+        remoteIp ?? "n/a");
 
     registry.RegisterHeartbeat(
         request.ClientId,

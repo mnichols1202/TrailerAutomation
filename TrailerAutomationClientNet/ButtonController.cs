@@ -25,6 +25,7 @@ namespace TrailerAutomationClientNet
         private Task? _monitorTask;
         
         private const int DebounceDelayMs = 50;
+        private const int PollingIntervalMs = 20; // 20ms polling = 50Hz, good balance between responsiveness and CPU usage
         
         private class ButtonState
         {
@@ -123,6 +124,9 @@ namespace TrailerAutomationClientNet
             {
                 try
                 {
+                    // Poll every 20ms (50Hz) for good responsiveness without excessive CPU usage
+                    await Task.Delay(PollingIntervalMs, cancellationToken);
+                    
                     foreach (var kvp in _buttonStates)
                     {
                         var pin = kvp.Key;
