@@ -19,7 +19,7 @@ static unsigned long g_bootDelayStartMs = 0;
 static bool g_bootDelayComplete = false;
 bool g_deviceRegistered = false;  // Non-static so commandlistener can access
 
-// Intervals from config (will be loaded from SD card)
+// Intervals from config (will be loaded from LittleFS)
 static unsigned long g_heartbeatIntervalMs = 60000UL; // Default 60s
 
 void setup()
@@ -33,11 +33,11 @@ void setup()
     
     logLine("TrailerAutomationClientS3 starting...");
     
-    // Initialize SD card and load configuration FIRST
+    // Initialize LittleFS and load configuration FIRST
     if (!initSdConfig())
     {
-        logLine("FATAL: Failed to load SD card configuration!");
-        logLine("System halted. Please check SD card and config.json.");
+        logLine("FATAL: Failed to load LittleFS configuration!");
+        logLine("System halted. Please check LittleFS and config.json.");
         setLedError(ERROR_SENSOR_READ); // Blink red to indicate config error
         while (1)
         {
