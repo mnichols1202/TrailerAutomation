@@ -4,9 +4,9 @@
     "Password": "J0shua07"
   },
   "Device": {
-    "ClientId": "ESP32-S3-001",
+    "ClientId": "ESP32-S3-002",
     "DeviceType": "ESP32-S3",
-    "FriendlyName": "ESP32 Node 1",
+    "FriendlyName": "ESP32 Node 2",
     "CommandListenerPort": 8888
   },
   "Intervals": {
@@ -16,20 +16,19 @@
     "Relays": [
       {
         "Id": "relay1",
-        "Name": "Relay 1",
+        "Name": "LED",
         "Pin": 4,
-        "InitialState": false,
-        "Enabled": true
+        "InitialState": false
       }
     ],
     "Buttons": [
       {
-	    "Id": "button1",
-	    "Name": "Lights",
-	    "Pin": 12,
-	    "TargetDevice": "Pi-3B-001",
-	    "TargetRelay": "relay3",
-	    "Enabled": true
+        "Id": "button1",
+        "Name": "Local Button",
+        "Pin": 15,
+        "TargetDevice": "ESP32-S3-002",
+        "TargetRelay": "relay1",
+        "Enabled": true
       }
     ]
   }

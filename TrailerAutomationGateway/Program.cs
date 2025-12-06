@@ -8,6 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.AspNetCore.Watch.BrowserRefresh", LogLevel.None); // Suppress browser refresh noise
 
 // Fixed HTTP port for the gateway
 const int gatewayPort = 5000;

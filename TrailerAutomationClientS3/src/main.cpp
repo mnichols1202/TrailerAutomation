@@ -124,9 +124,10 @@ void loop()
             
             unsigned long now = millis();
             g_lastHeartbeatMs = now;
+            // Initialize sensor timers to 0 so first reading happens immediately
             for (int i = 0; i < MAX_SENSORS; i++)
             {
-                g_lastSensorMs[i] = now;
+                g_lastSensorMs[i] = 0;
             }
         }
         
