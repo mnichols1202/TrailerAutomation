@@ -187,6 +187,10 @@ namespace TrailerAutomationClientNet
                     {
                         response = await HandleSetRelayCommandAsync(root, commandId);
                     }
+                    else if (commandType == "getRelayState")
+                    {
+                        response = HandleGetRelayStateCommand(root, commandId);
+                    }
                     else
                     {
                         response = new
@@ -301,6 +305,81 @@ namespace TrailerAutomationClientNet
             catch (Exception ex)
             {
                 Console.WriteLine($"[CommandListener] SetRelay error: {ex.Message}");
+                return new
+                {
+                    commandId = commandId,
+                    success = false,
+                    message = $"Error: {ex.Message}",
+                    errorCode = "EXECUTION_ERROR"
+                };
+            }
+        }
+
+        private object HandleGetRelayStateCommand(JsonElement command, string? commandId)
+        {
+            try
+            {
+                // Extract payload
+                if (!command.TryGetProperty("payload", out var payload))
+                {
+                    return new
+                    {
+                        commandId = commandId,
+                        success = false,
+                        message = "Missing payload",
+                        errorCode = "MISSING_PAYLOAD"
+                    };
+                }
+
+                var relayId = payload.TryGetProperty("relayId", out var relayIdProp) 
+                    ? relayIdProp.GetString() 
+                    : null;
+
+                if (string.IsNullOrEmpty(relayId))
+                {
+                    return new
+                    {
+                        commandId = commandId,
+                        success = false,
+                        message = "Invalid payload: relayId required",
+                        errorCode = "INVALID_PAYLOAD"
+                    };
+                }
+
+                // Find relay in configuration
+                var relay = _config.Hardware.Relays.Find(r => r.Id == relayId);
+                if (relay == null)
+                {
+                    return new
+                    {
+                        commandId = commandId,
+                        success = false,
+                        message = $"Relay '{relayId}' not found",
+                        errorCode = "RELAY_NOT_FOUND"
+                    };
+                }
+
+                // Get current state from GPIO controller
+                var currentState = _gpioController.GetRelayState(relayId);
+
+                Console.WriteLine($"[CommandListener] GetRelayState: {relayId} -> {currentState} (Pin: {relay.Pin})");
+
+                return new
+                {
+                    commandId = commandId,
+                    success = true,
+                    message = $"Relay '{relayId}' state retrieved",
+                    data = new
+                    {
+                        relayId = relayId,
+                        state = currentState ?? "unknown",
+                        pin = relay.Pin
+                    }
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CommandListener] GetRelayState error: {ex.Message}");
                 return new
                 {
                     commandId = commandId,

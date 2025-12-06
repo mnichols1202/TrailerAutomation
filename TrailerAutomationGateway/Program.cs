@@ -243,7 +243,8 @@ app.MapPost("/api/devices/{clientId}/commands/setRelay", async (
 app.MapPost("/api/devices/{clientId}/relays/{relayId}/toggle", async (
     string clientId,
     string relayId,
-    DeviceCommandService commandService) =>
+    DeviceCommandService commandService,
+    ClientRegistry clientRegistry) =>
 {
     Console.WriteLine(
         $"[Device] POST /api/devices/{clientId}/relays/{relayId}/toggle {DateTime.UtcNow:O}");
@@ -278,6 +279,8 @@ app.MapPost("/api/devices/{clientId}/relays/{relayId}/toggle", async (
 
     if (result.Success)
     {
+        // Update registry so web UI reflects the new state
+        clientRegistry.UpdateRelayState(clientId, relayId, newState);
         return Results.Ok(result);
     }
     else

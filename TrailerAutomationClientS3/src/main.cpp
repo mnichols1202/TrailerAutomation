@@ -124,7 +124,10 @@ void loop()
             
             unsigned long now = millis();
             g_lastHeartbeatMs = now;
-            g_lastSensorMs    = now;
+            for (int i = 0; i < MAX_SENSORS; i++)
+            {
+                g_lastSensorMs[i] = now;
+            }
         }
         
         // Still waiting for boot delay - keep LED red and yield
@@ -318,6 +321,9 @@ void loop()
         }
     }
 
-    // 7. Small delay to avoid busy spin
+    // 7. Check button states
+    checkButtons();
+
+    // 8. Small delay to avoid busy spin
     delay(10);
 }

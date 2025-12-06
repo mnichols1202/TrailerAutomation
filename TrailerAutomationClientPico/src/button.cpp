@@ -11,7 +11,8 @@
 struct ButtonState
 {
     int pin;
-    bool lastState;
+    bool lastValue;          // Last raw reading (for debounce detection)
+    bool lastStableValue;    // Last stable reading after debounce
     unsigned long lastDebounceTime;
     char targetDevice[MAX_DEVICE_ID_LEN];
     char targetRelay[MAX_RELAY_ID_LEN];
@@ -59,7 +60,8 @@ bool initButtons()
         
         // Initialize state tracking
         g_buttonStates[i].pin = btn.pin;
-        g_buttonStates[i].lastState = HIGH; // Pull-up = HIGH when not pressed
+        g_buttonStates[i].lastValue = HIGH;       // Pull-up = HIGH when not pressed
+        g_buttonStates[i].lastStableValue = HIGH; // Pull-up = HIGH when not pressed
         g_buttonStates[i].lastDebounceTime = 0;
         strncpy(g_buttonStates[i].targetDevice, btn.targetDevice, MAX_DEVICE_ID_LEN - 1);
         strncpy(g_buttonStates[i].targetRelay, btn.targetRelay, MAX_RELAY_ID_LEN - 1);
@@ -123,39 +125,32 @@ static void handleLocalToggle(ButtonState* btnState)
 
 static void handleRemoteToggle(ButtonState* btnState)
 {
-    // Send explicit state command to gateway (like web UI does)
+    // Send toggle command to gateway which will forward to remote device
     if (!isGatewayKnown())
     {
         logLine("[Button] ERROR: Gateway unknown, cannot control remote relay");
         return;
     }
     
-    // Flip local state tracking
-    btnState->relayState = !btnState->relayState;
-    const char* stateStr = btnState->relayState ? "on" : "off";
-    
     String url = "http://" + getGatewayHost() + ":" + String(getGatewayPort()) + 
                  "/api/devices/" + String(btnState->targetDevice) + 
-                 "/relays/" + String(btnState->targetRelay) + "/state?state=" + stateStr;
+                 "/relays/" + String(btnState->targetRelay) + "/toggle";
     
     HTTPClient http;
     http.begin(url);
     http.setTimeout(5000);
     
-    logLine("[Button] Setting remote relay to " + String(stateStr));
+    logLine("[Button] Toggling remote relay " + String(btnState->targetDevice) + ":" + String(btnState->targetRelay));
     
     int httpCode = http.POST("");
     
     if (httpCode == HTTP_CODE_OK)
     {
-        String response = http.getString();
-        logLine("[Button] Remote relay set to " + String(stateStr));
+        logLine("[Button] Remote relay toggled successfully");
     }
     else
     {
-        logLine("[Button] ERROR: Remote command failed, HTTP code " + String(httpCode));
-        // Revert state on failure
-        btnState->relayState = !btnState->relayState;
+        logLine("[Button] ERROR: Remote toggle failed, HTTP code " + String(httpCode));
     }
     
     http.end();
@@ -185,18 +180,18 @@ void checkButtons()
         // Read current button state (active LOW)
         bool currentReading = digitalRead(state.pin);
         
-        // Check if state changed (for debouncing)
-        if (currentReading != state.lastState)
+        // Check if state changed (reset debounce timer)
+        if (currentReading != state.lastValue)
         {
             state.lastDebounceTime = now;
+            state.lastValue = currentReading;
         }
         
-        // If debounce time has passed, accept the reading
+        // If debounce time has passed, the reading is stable
         if ((now - state.lastDebounceTime) > DEBOUNCE_DELAY_MS)
         {
-            // Button is pressed when LOW (pull-up configuration)
-            // Trigger on rising edge (button release) to avoid repeated triggers
-            if (state.lastState == LOW && currentReading == HIGH)
+            // Check for rising edge (Low -> High transition after debounce)
+            if (state.lastStableValue == LOW && currentReading == HIGH)
             {
                 // Button was pressed and now released - toggle!
                 logLine("[Button] Button '" + String(btn.name) + "' pressed");
@@ -213,8 +208,9 @@ void checkButtons()
                     handleRemoteToggle(&state);
                 }
             }
+            
+            // Update stable value after debounce period
+            state.lastStableValue = currentReading;
         }
-        
-        state.lastState = currentReading;
     }
 }

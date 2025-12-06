@@ -281,11 +281,11 @@ void loop()
         
         if (now - g_lastSensorMs[i] >= sensorIntervalMs)
         {
-            logLine("[" + String(config.sensors[i].sensorId) + "] Sensor read interval reached");
+            logLine("[" + String(config.sensors[i].id) + "] Sensor read interval reached");
             
             if (!sendSensorReading())
             {
-                logLine("[" + String(config.sensors[i].sensorId) + "] Sensor reading failed. Will keep trying.");
+                logLine("[" + String(config.sensors[i].id) + "] Sensor reading failed. Will keep trying.");
                 setLedError(ERROR_SENSOR_SEND);  // 3 red blinks - Sensor send failed
             }
             else

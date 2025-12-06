@@ -1,0 +1,25 @@
+{
+  "folders": [
+    {
+      "path": "TrailerAutomationGateway"
+    },
+    {
+      "path": "TrailerAutomationClientNet"
+    },
+    {
+      "path": "TrailerAutomationClientPico"
+    },
+    {
+      "path": "TrailerAutomationClientS3"
+    }
+  ],
+  "settings": {
+    // PlatformIO: enable all PIO projects in this workspace
+    "platformio-ide.activateOnlyOnPlatformIOProject": false,
+    "platformio-ide.autoProjectEnable": true,
+
+    // Optional but useful: C# settings for .NET projects
+    "dotnet.server.useOmnisharp": false,
+    "omnisharp.enableRoslynAnalyzers": true
+  }
+}

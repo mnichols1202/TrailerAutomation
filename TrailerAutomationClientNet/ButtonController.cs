@@ -217,26 +217,21 @@ namespace TrailerAutomationClientNet
         
         private async Task HandleRemoteToggleAsync(ButtonState btnState)
         {
-            // Flip local state tracking (like web UI does)
-            btnState.RelayState = !btnState.RelayState;
-            var stateStr = btnState.RelayState ? "on" : "off";
-            
+            // Send toggle command to gateway which will forward to remote device
             try
             {
-                var url = $"/api/devices/{btnState.Config.TargetDevice}/relays/{btnState.Config.TargetRelay}/state?state={stateStr}";
+                var url = $"/api/devices/{btnState.Config.TargetDevice}/relays/{btnState.Config.TargetRelay}/toggle";
                 
-                Console.WriteLine($"[Button] Setting remote relay to {stateStr}");
+                Console.WriteLine($"[Button] Toggling remote relay {btnState.Config.TargetDevice}:{btnState.Config.TargetRelay}");
                 
                 var response = await _httpClient.PostAsync(url, null);
                 response.EnsureSuccessStatusCode();
                 
-                Console.WriteLine($"[Button] Remote relay '{btnState.Config.TargetRelay}' set to {stateStr}");
+                Console.WriteLine($"[Button] Remote relay toggled successfully");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Button] ERROR: Remote command failed: {ex.Message}");
-                // Revert state on failure
-                btnState.RelayState = !btnState.RelayState;
+                Console.WriteLine($"[Button] ERROR: Remote toggle failed: {ex.Message}");
             }
         }
         

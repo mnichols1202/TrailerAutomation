@@ -49,7 +49,7 @@ void processCommandListener()
     }
     
     // Check for incoming client connections
-    WiFiClient client = g_commandServer->available();
+    WiFiClient client = g_commandServer->accept();
     
     if (!client)
     {
@@ -263,6 +263,51 @@ void processCommandListener()
                     respDoc["success"] = false;
                     respDoc["message"] = String("Failed to set relay '") + relayId + "'";
                     respDoc["errorCode"] = "RELAY_ERROR";
+                }
+            }
+        }
+    }
+    else if (strcmp(commandType, "getRelayState") == 0)
+    {
+        // Extract payload
+        JsonObject payload = cmdDoc["payload"];
+        
+        if (!payload)
+        {
+            respDoc["success"] = false;
+            respDoc["message"] = "Missing payload";
+            respDoc["errorCode"] = "MISSING_PAYLOAD";
+        }
+        else
+        {
+            const char* relayId = payload["relayId"];
+            
+            if (!relayId)
+            {
+                respDoc["success"] = false;
+                respDoc["message"] = "Invalid payload: relayId required";
+                respDoc["errorCode"] = "INVALID_PAYLOAD";
+            }
+            else
+            {
+                bool state = false;
+                
+                if (getRelayState(relayId, &state))
+                {
+                    const char* stateStr = state ? "on" : "off";
+                    
+                    respDoc["success"] = true;
+                    respDoc["message"] = String("Relay '") + relayId + "' state retrieved";
+                    
+                    JsonObject data = respDoc["data"].to<JsonObject>();
+                    data["relayId"] = relayId;
+                    data["state"] = stateStr;
+                }
+                else
+                {
+                    respDoc["success"] = false;
+                    respDoc["message"] = String("Relay '") + relayId + "' not found";
+                    respDoc["errorCode"] = "RELAY_NOT_FOUND";
                 }
             }
         }

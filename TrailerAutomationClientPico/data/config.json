@@ -16,20 +16,20 @@
     "Relays": [
       {
         "Id": "relay1",
-        "Name": "Relay 1",
+        "Name": "LED",
         "Pin": 15,
         "InitialState": false,
         "Enabled": true
       }
     ],
-    "Sensors": [
-      {
-        "Id": "sht31_1",
-        "Name": "SHT31 Sensor",
-        "Type": "SHT31",
-        "I2cAddress": "0x44",
-        "Enabled": true,
-        "ReadingIntervalSeconds": 300
+    "Buttons": [
+   {
+  	"Id": "button1",
+	  "Name": "Lights",
+	  "Pin": 12,
+	  "TargetDevice": "Pi-3B-001",
+	  "TargetRelay": "relay3",
+	  "Enabled": true
       }
     ]
   }
