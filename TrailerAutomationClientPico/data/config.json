@@ -4,9 +4,9 @@
     "Password": "J0shua07"
   },
   "Device": {
-    "ClientId": "Pico-2W-001",
+    "ClientId": "PicoW1",
     "DeviceType": "Pico2W",
-    "FriendlyName": "Pico 2W Node 1",
+    "FriendlyName": "Trailer Controller",
     "CommandListenerPort": 8888
   },
   "Intervals": {
@@ -15,21 +15,66 @@
   "Hardware": {
     "Relays": [
       {
-        "Id": "relay1",
-        "Name": "LED",
-        "Pin": 15,
+        "Id": "1",
+        "Name": "Water Heater",
+        "Pin": 6,
+        "InitialState": false,
+        "Enabled": true
+      },
+      {
+        "Id": "2",
+        "Name": "Water Pump",
+        "Pin": 7,
+        "InitialState": false,
+        "Enabled": true
+      },
+      {
+        "Id": "3",
+        "Name": "Exterior Lights",
+        "Pin": 8,
+        "InitialState": false,
+        "Enabled": true
+      },
+      {
+        "Id": "4",
+        "Name": "Interior Lights",
+        "Pin": 9,
         "InitialState": false,
         "Enabled": true
       }
     ],
     "Buttons": [
-   {
-  	"Id": "button1",
-	  "Name": "Lights",
-	  "Pin": 12,
-	  "TargetDevice": "Pi-3B-001",
-	  "TargetRelay": "relay3",
-	  "Enabled": true
+      {
+        "Id": "button1",
+        "Name": "Water Heater Button",
+        "Pin": 0,
+        "TargetDevice": "PicoW1",
+        "TargetRelay": "1",
+        "Enabled": true
+      },
+      {
+        "Id": "button2",
+        "Name": "Water Pump Button",
+        "Pin": 1,
+        "TargetDevice": "PicoW1",
+        "TargetRelay": "2",
+        "Enabled": true
+      },
+      {
+        "Id": "button3",
+        "Name": "Exterior Lights Button",
+        "Pin": 2,
+        "TargetDevice": "PicoW1",
+        "TargetRelay": "3",
+        "Enabled": true
+      },
+      {
+        "Id": "button4",
+        "Name": "Interior Lights Button",
+        "Pin": 3,
+        "TargetDevice": "PicoW1",
+        "TargetRelay": "4",
+        "Enabled": true
       }
     ]
   }
