@@ -119,6 +119,13 @@
                                     title="Reboot Device">
                                 🔄 Reboot
                             </button>
+                            <button class="refresh-btn" 
+                                    style="background: #17a2b8; color: white; padding: 5px 10px; margin-left: 5px;" 
+                                    @onclick="() => ShowDeviceConfig(device.DeviceId)"
+                                    disabled="@(!isOnline)"
+                                    title="View Configuration">
+                                ℹ️ Info
+                            </button>
                         </td>
                     </tr>
                     @if (_commandResults.ContainsKey(device.DeviceId))
@@ -145,6 +152,32 @@
     }
 </div>
 
+@if (_showConfigModal)
+{
+    <div class="modal-overlay" @onclick="CloseConfigModal">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Device Configuration</h3>
+                <button class="modal-close" @onclick="CloseConfigModal">✖</button>
+            </div>
+            <div class="modal-body">
+                @if (_configLoading)
+                {
+                    <p style="text-align: center; padding: 20px;">⏳ Loading configuration...</p>
+                }
+                else if (!string.IsNullOrEmpty(_configError))
+                {
+                    <p style="color: #dc3545; padding: 20px;">❌ @_configError</p>
+                }
+                else if (!string.IsNullOrEmpty(_deviceConfig))
+                {
+                    <pre style="background: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 14px; line-height: 1.6;">@_deviceConfig</pre>
+                }
+            </div>
+        </div>
+    </div>
+}
+
 <div class="card">
     <h2>ℹ️ Information</h2>
     <p style="color: #7f8c8d;">
@@ -165,6 +198,10 @@
     private bool _isReInitializing = false;
     private string _reInitMessage = string.Empty;
     private bool _reInitSuccess = false;
+    private bool _showConfigModal = false;
+    private bool _configLoading = false;
+    private string _deviceConfig = string.Empty;
+    private string _configError = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -406,6 +443,162 @@
             };
         }
         
+        StateHasChanged();
+    }
+
+    private async Task ShowDeviceConfig(string deviceId)
+    {
+        _showConfigModal = true;
+        _configLoading = true;
+        _deviceConfig = string.Empty;
+        _configError = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            Console.WriteLine($"[DeviceConfig] Requesting configuration from {deviceId}...");
+            
+            var getConfigCommand = new DeviceCommand
+            {
+                CommandId = Guid.NewGuid().ToString(),
+                Type = "getConfig",
+                Payload = System.Text.Json.JsonSerializer.SerializeToElement(new { })
+            };
+            
+            var result = await CommandService.SendCommandAsync(deviceId, getConfigCommand);
+            
+            if (result != null && result.Success && result.Data != null)
+            {
+                Console.WriteLine($"[DeviceConfig] ✅ Configuration received from {deviceId}");
+                _deviceConfig = FormatConfiguration(deviceId, result.Data);
+            }
+            else
+            {
+                Console.WriteLine($"[DeviceConfig] ❌ Failed to get configuration from {deviceId}");
+                _configError = result?.Message ?? "Failed to retrieve configuration";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DeviceConfig] ❌ Error: {ex.Message}");
+            _configError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _configLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private string FormatConfiguration(string deviceId, object configData)
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(configData);
+            var config = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+            
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("=== Configuration ===");
+            sb.AppendLine();
+            
+            // Device section
+            if (config.TryGetProperty("device", out var device))
+            {
+                sb.AppendLine("Device:");
+                sb.AppendLine($"  ClientId: {device.GetProperty("clientId").GetString()}");
+                sb.AppendLine($"  DeviceType: {device.GetProperty("deviceType").GetString()}");
+                sb.AppendLine($"  FriendlyName: {device.GetProperty("friendlyName").GetString()}");
+                sb.AppendLine($"  Command Listener Port: {device.GetProperty("commandListenerPort").GetInt32()}");
+                sb.AppendLine();
+            }
+            
+            // Intervals section
+            if (config.TryGetProperty("intervals", out var intervals))
+            {
+                sb.AppendLine("Intervals:");
+                sb.AppendLine($"  Heartbeat: {intervals.GetProperty("heartbeatSeconds").GetInt32()}s");
+                if (intervals.TryGetProperty("commandPollingSeconds", out var polling))
+                {
+                    sb.AppendLine($"  Command Polling: {polling.GetInt32()}s");
+                }
+                sb.AppendLine("  (Sensor intervals configured per-sensor below)");
+                sb.AppendLine();
+            }
+            
+            // Gateway section
+            if (config.TryGetProperty("gateway", out var gateway))
+            {
+                sb.AppendLine("Gateway:");
+                if (gateway.TryGetProperty("discoveryTimeoutSeconds", out var timeout))
+                {
+                    sb.AppendLine($"  Discovery Timeout: {timeout.GetInt32()}s");
+                }
+                sb.AppendLine();
+            }
+            
+            // Relays section
+            if (config.TryGetProperty("relays", out var relays) && relays.GetArrayLength() > 0)
+            {
+                sb.AppendLine($"Relays ({relays.GetArrayLength()}):");
+                foreach (var relay in relays.EnumerateArray())
+                {
+                    var id = relay.GetProperty("id").GetString();
+                    var name = relay.GetProperty("name").GetString();
+                    var pin = relay.GetProperty("pin").GetInt32();
+                    var initialState = relay.GetProperty("initialState").GetBoolean();
+                    sb.AppendLine($"  [{id}] {name} - Pin: {pin}, Initial: {(initialState ? "ON" : "OFF")}");
+                }
+                sb.AppendLine();
+            }
+            
+            // Sensors section
+            if (config.TryGetProperty("sensors", out var sensors) && sensors.GetArrayLength() > 0)
+            {
+                sb.AppendLine($"Sensors ({sensors.GetArrayLength()}):");
+                foreach (var sensor in sensors.EnumerateArray())
+                {
+                    var id = sensor.GetProperty("id").GetString();
+                    var type = sensor.GetProperty("type").GetString();
+                    var name = sensor.GetProperty("name").GetString();
+                    var i2c = sensor.GetProperty("i2cAddress").GetString();
+                    var enabled = sensor.GetProperty("enabled").GetBoolean();
+                    var interval = sensor.GetProperty("readingIntervalSeconds").GetInt32();
+                    sb.AppendLine($"  [{id}] {name} - Type: {type}, I2C: {i2c}, Enabled: {enabled}, Interval: {interval}s");
+                }
+                sb.AppendLine();
+            }
+            
+            // Buttons section
+            if (config.TryGetProperty("buttons", out var buttons) && buttons.GetArrayLength() > 0)
+            {
+                sb.AppendLine($"Buttons ({buttons.GetArrayLength()}):");
+                foreach (var button in buttons.EnumerateArray())
+                {
+                    var id = button.GetProperty("id").GetString();
+                    var name = button.GetProperty("name").GetString();
+                    var pin = button.GetProperty("pin").GetInt32();
+                    var targetDevice = button.GetProperty("targetDevice").GetString();
+                    var targetRelay = button.GetProperty("targetRelay").GetString();
+                    var enabled = button.GetProperty("enabled").GetBoolean();
+                    sb.AppendLine($"  [{id}] {name} - Pin: {pin}, Target: {targetDevice}/{targetRelay}, Enabled: {enabled}");
+                }
+                sb.AppendLine();
+            }
+            
+            sb.AppendLine("=====================");
+            
+            return sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DeviceConfig] Format error: {ex.Message}");
+            return $"Error formatting configuration: {ex.Message}";
+        }
+    }
+
+    private void CloseConfigModal()
+    {
+        _showConfigModal = false;
         StateHasChanged();
     }
 

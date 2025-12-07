@@ -24,10 +24,10 @@
     "Buttons": [
       {
         "Id": "button1",
-        "Name": "Local Button",
+        "Name": "REmote Button",
         "Pin": 15,
-        "TargetDevice": "ESP32-S3-002",
-        "TargetRelay": "relay1",
+        "TargetDevice": "Pi-3B-001",
+        "TargetRelay": "relay3",
         "Enabled": true
       }
     ]

@@ -27,13 +27,10 @@ builder.Services.AddHttpClient("DeviceClient", client =>
     client.Timeout = TimeSpan.FromSeconds(10);
 })
 .SetHandlerLifetime(TimeSpan.FromMinutes(5))  // Connection pooling
-.ConfigureHttpMessageHandlerBuilder(builder =>
+.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
 {
-    builder.PrimaryHandler = new SocketsHttpHandler
-    {
-        PooledConnectionLifetime = TimeSpan.FromMinutes(2),
-        MaxConnectionsPerServer = 10
-    };
+    PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+    MaxConnectionsPerServer = 10
 });
 builder.Services.AddScoped<HttpClient>(sp => 
     sp.GetRequiredService<IHttpClientFactory>().CreateClient("DeviceClient"));
@@ -266,7 +263,7 @@ app.MapPost("/api/devices/{clientId}/relays/{relayId}/toggle", async (
     }
     
     // Parse current state from response
-    var dataElement = (System.Text.Json.JsonElement)stateResult.Data;
+    var dataElement = (System.Text.Json.JsonElement)(stateResult.Data ?? new { });
     var currentState = dataElement.TryGetProperty("state", out var stateProp) 
         ? stateProp.GetString() 
         : "off";

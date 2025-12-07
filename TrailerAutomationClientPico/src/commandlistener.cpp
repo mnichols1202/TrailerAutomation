@@ -312,6 +312,70 @@ void processCommandListener()
             }
         }
     }
+    else if (strcmp(commandType, "getConfig") == 0)
+    {
+        // Return device configuration
+        const DeviceConfig& config = getDeviceConfig();
+        
+        respDoc["success"] = true;
+        respDoc["message"] = "Configuration retrieved";
+        
+        JsonObject data = respDoc["data"].to<JsonObject>();
+        
+        // Device section
+        JsonObject device = data["device"].to<JsonObject>();
+        device["clientId"] = config.clientId;
+        device["deviceType"] = config.deviceType;
+        device["friendlyName"] = config.friendlyName;
+        device["commandListenerPort"] = config.commandListenerPort;
+        
+        // Intervals section
+        JsonObject intervals = data["intervals"].to<JsonObject>();
+        intervals["heartbeatSeconds"] = config.heartbeatSeconds;
+        
+        // Gateway section (Pico doesn't have this in config, but include for consistency)
+        JsonObject gateway = data["gateway"].to<JsonObject>();
+        gateway["discoveryTimeoutSeconds"] = 8;  // Default timeout
+        
+        // Relays section
+        JsonArray relays = data["relays"].to<JsonArray>();
+        for (int i = 0; i < config.relayCount; i++)
+        {
+            JsonObject relay = relays.add<JsonObject>();
+            relay["id"] = config.relays[i].id;
+            relay["name"] = config.relays[i].name;
+            relay["pin"] = config.relays[i].pin;
+            relay["initialState"] = config.relays[i].initialState;
+        }
+        
+        // Sensors section
+        JsonArray sensors = data["sensors"].to<JsonArray>();
+        for (int i = 0; i < config.sensorCount; i++)
+        {
+            JsonObject sensor = sensors.add<JsonObject>();
+            sensor["id"] = config.sensors[i].id;
+            sensor["type"] = config.sensors[i].type;
+            sensor["name"] = config.sensors[i].name;
+            sensor["i2cAddress"] = config.sensors[i].i2cAddress;
+            sensor["enabled"] = config.sensors[i].enabled;
+            sensor["readingIntervalSeconds"] = config.sensors[i].readingIntervalSeconds;
+        }
+        
+        // Buttons section
+        JsonArray buttons = data["buttons"].to<JsonArray>();
+        for (int i = 0; i < config.buttonCount; i++)
+        {
+            JsonObject button = buttons.add<JsonObject>();
+            button["id"] = config.buttons[i].id;
+            button["name"] = config.buttons[i].name;
+            button["pin"] = config.buttons[i].pin;
+            button["targetDevice"] = config.buttons[i].targetDevice;
+            button["targetRelay"] = config.buttons[i].targetRelay;
+            button["enabled"] = config.buttons[i].enabled;
+        }
+        
+        logLine("[CommandListener] GetConfig command received, returning configuration");
+    }
     else
     {
         respDoc["success"] = false;

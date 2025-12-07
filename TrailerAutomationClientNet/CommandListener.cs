@@ -191,6 +191,10 @@ namespace TrailerAutomationClientNet
                     {
                         response = HandleGetRelayStateCommand(root, commandId);
                     }
+                    else if (commandType == "getConfig")
+                    {
+                        response = HandleGetConfigCommand(commandId);
+                    }
                     else
                     {
                         response = new
@@ -380,6 +384,81 @@ namespace TrailerAutomationClientNet
             catch (Exception ex)
             {
                 Console.WriteLine($"[CommandListener] GetRelayState error: {ex.Message}");
+                return new
+                {
+                    commandId = commandId,
+                    success = false,
+                    message = $"Error: {ex.Message}",
+                    errorCode = "EXECUTION_ERROR"
+                };
+            }
+        }
+
+        private object HandleGetConfigCommand(string? commandId)
+        {
+            try
+            {
+                Console.WriteLine($"[CommandListener] GetConfig command received");
+
+                // Build configuration response
+                var configData = new
+                {
+                    device = new
+                    {
+                        clientId = _config.Device.ClientId,
+                        deviceType = _config.Device.DeviceType,
+                        friendlyName = _config.Device.FriendlyName,
+                        commandListenerPort = _config.Device.CommandListenerPort
+                    },
+                    intervals = new
+                    {
+                        heartbeatSeconds = _config.Intervals.HeartbeatSeconds,
+                        commandPollingSeconds = _config.Intervals.CommandPollingSeconds
+                    },
+                    gateway = new
+                    {
+                        discoveryTimeoutSeconds = _config.Gateway.DiscoveryTimeoutSeconds
+                    },
+                    relays = _config.Hardware.Relays.Select(r => new
+                    {
+                        id = r.Id,
+                        name = r.Name,
+                        pin = r.Pin,
+                        initialState = r.InitialState
+                    }).ToList(),
+                    sensors = _config.Hardware.Sensors.Select(s => new
+                    {
+                        id = s.Id,
+                        type = s.Type,
+                        name = s.Name,
+                        i2cAddress = s.I2cAddress,
+                        enabled = s.Enabled,
+                        readingIntervalSeconds = s.ReadingIntervalSeconds
+                    }).ToList(),
+                    buttons = _buttonController != null 
+                        ? _config.Hardware.Buttons.Select(b => new
+                        {
+                            id = b.Id,
+                            name = b.Name,
+                            pin = b.Pin,
+                            targetDevice = b.TargetDevice,
+                            targetRelay = b.TargetRelay,
+                            enabled = b.Enabled
+                        }).Cast<object>().ToList()
+                        : new List<object>()
+                };
+
+                return new
+                {
+                    commandId = commandId,
+                    success = true,
+                    message = "Configuration retrieved",
+                    data = configData
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CommandListener] GetConfig error: {ex.Message}");
                 return new
                 {
                     commandId = commandId,
