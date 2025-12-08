@@ -1,0 +1,60 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace TrailerAutomationThermostatNet;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        Console.WriteLine("TrailerAutomation Thermostat Starting...");
+        Console.WriteLine($"Target Platform: linux-arm (Raspberry Pi Zero 2 W)");
+        Console.WriteLine($".NET Version: {Environment.Version}");
+        Console.WriteLine();
+
+        try
+        {
+            // Load configuration
+            var config = ConfigurationLoader.Load();
+            Console.WriteLine($"Configuration loaded: {config.Device.ClientId} ({config.Device.FriendlyName})");
+            Console.WriteLine($"Thermostat Mode: {config.Thermostat.DefaultMode}");
+            Console.WriteLine($"Default Setpoint: {config.Thermostat.DefaultSetpoint}°{config.Thermostat.TemperatureUnit[0]}");
+            Console.WriteLine();
+
+            // TODO: Initialize components
+            // - DisplayController (RGB OLED)
+            // - Sht31Reader (temperature/humidity sensor)
+            // - ButtonController (4 tactile buttons)
+            // - UartCommunication (relay box communication)
+            // - ThermostatController (core logic)
+            // - GatewayDiscovery (WiFi connection)
+            // - CommandListener (receive gateway commands)
+
+            Console.WriteLine("Component initialization will be implemented next...");
+            Console.WriteLine();
+            Console.WriteLine("Press Ctrl+C to exit");
+
+            // Keep running
+            var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (sender, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+                Console.WriteLine("\nShutdown requested...");
+            };
+
+            await Task.Delay(Timeout.Infinite, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine("Shutdown complete.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Fatal error: {ex.Message}");
+            Console.WriteLine(ex.StackTrace);
+            Environment.Exit(1);
+        }
+    }
+}

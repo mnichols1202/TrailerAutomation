@@ -11,6 +11,9 @@
     },
     {
       "path": "TrailerAutomationClientS3"
+    },
+    {
+      "path": "TrailerAutomationThermostatNet"
     }
   ],
   "settings": {

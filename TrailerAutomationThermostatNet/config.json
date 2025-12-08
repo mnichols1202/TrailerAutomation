@@ -1,0 +1,56 @@
+﻿{
+  "Device": {
+    "ClientId": "Thermostat1",
+    "DeviceType": "Thermostat",
+    "FriendlyName": "Wall Thermostat",
+    "CommandListenerPort": 8888
+  },
+  "Intervals": {
+    "HeartbeatSeconds": 60,
+    "CommandPollingSeconds": 5,
+    "SensorReadingSeconds": 10,
+    "DisplayUpdateMs": 100
+  },
+  "Gateway": {
+    "DiscoveryTimeoutSeconds": 8
+  },
+  "Hardware": {
+    "Display": {
+      "Type": "ILI9341",
+      "Width": 320,
+      "Height": 240,
+      "DisplaySpiDevice": 0,
+      "DisplaySpiChipSelect": 8,
+      "TouchSpiDevice": 1,
+      "TouchSpiChipSelect": 7,
+      "DataCommandPin": 25,
+      "ResetPin": 24,
+      "BacklightPin": 23,
+      "TouchIrqPin": 22,
+      "TimeoutSeconds": 30
+    },
+    "Sensor": {
+      "Type": "SHT31",
+      "I2cBus": 1,
+      "I2cAddress": 68,
+      "ReadingIntervalSeconds": 10
+    },
+    "Uart": {
+      "PortName": "/dev/serial0",
+      "BaudRate": 115200
+    }
+  },
+  "Thermostat": {
+    "TemperatureUnit": "Fahrenheit",
+    "DefaultSetpoint": 72.0,
+    "MinSetpoint": 60.0,
+    "MaxSetpoint": 85.0,
+    "SetpointStep": 1.0,
+    "Hysteresis": 1.0,
+    "DefaultMode": "Off",
+    "CompressorDelaySeconds": 180,
+    "MinRunTimeSeconds": 300,
+    "MaxRunTimeSeconds": 3600,
+    "ReadingIntervalSeconds": 10
+  }
+}
