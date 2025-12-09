@@ -105,6 +105,16 @@ app.MapPost("/api/heartbeat", (HeartbeatRequest request, HttpContext httpContext
         remoteIp
     );
 
+    // Sync relay states if provided (important for Gateway restart recovery)
+    if (request.RelayStates != null && request.RelayStates.Count > 0)
+    {
+        registry.UpdateRelayStates(request.ClientId, request.RelayStates);
+        logger.LogInformation(
+            "[Gateway] Synced relay states for {ClientId}: {States}",
+            request.ClientId,
+            string.Join(", ", request.RelayStates.Select(kvp => $"{kvp.Key}={kvp.Value}")));
+    }
+
     // Check if device is fully registered (has command port and capabilities)
     var client = registry.GetClient(request.ClientId);
     var needsRegistration = client == null || client.CommandPort == 0;
@@ -317,6 +327,66 @@ app.MapPost("/api/devices/{clientId}/relays/{relayId}/state", (
     });
 })
 .WithName("NotifyRelayState")
+.WithOpenApi();
+
+// Request state sync from a device (useful after Gateway restart)
+app.MapPost("/api/devices/{clientId}/commands/syncState", async (
+    string clientId,
+    DeviceCommandService commandService,
+    ClientRegistry clientRegistry) =>
+{
+    Console.WriteLine(
+        $"[Device] POST /api/devices/{clientId}/commands/syncState {DateTime.UtcNow:O}");
+
+    var client = clientRegistry.GetClient(clientId);
+    if (client == null || client.Relays == null)
+    {
+        return Results.NotFound(new { success = false, message = "Device not found or has no relays" });
+    }
+
+    var syncedStates = new Dictionary<string, string>();
+    var errors = new List<string>();
+
+    // Query each relay's current state
+    foreach (var relay in client.Relays)
+    {
+        var getStateCommand = new DeviceCommand
+        {
+            CommandId = Guid.NewGuid().ToString(),
+            Type = "getRelayState",
+            Payload = System.Text.Json.JsonSerializer.SerializeToElement(new { relayId = relay.Id })
+        };
+
+        var stateResult = await commandService.SendCommandAsync(clientId, getStateCommand);
+
+        if (stateResult != null && stateResult.Success)
+        {
+            var dataElement = (System.Text.Json.JsonElement)(stateResult.Data ?? new { });
+            var currentState = dataElement.TryGetProperty("state", out var stateProp)
+                ? stateProp.GetString()
+                : "off";
+
+            syncedStates[relay.Id] = currentState ?? "off";
+            clientRegistry.UpdateRelayState(clientId, relay.Id, currentState ?? "off");
+        }
+        else
+        {
+            errors.Add($"Failed to get state for relay {relay.Id}");
+        }
+    }
+
+    Console.WriteLine(
+        $"[Device] State sync complete for {clientId}: {string.Join(", ", syncedStates.Select(kvp => $"{kvp.Key}={kvp.Value}"))}");
+
+    return Results.Ok(new
+    {
+        success = errors.Count == 0,
+        clientId = clientId,
+        syncedStates = syncedStates,
+        errors = errors.Count > 0 ? errors : null
+    });
+})
+.WithName("SyncDeviceState")
 .WithOpenApi();
 
 // Receive temperature and humidity readings from a client

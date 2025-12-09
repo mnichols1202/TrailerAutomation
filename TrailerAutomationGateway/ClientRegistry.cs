@@ -231,6 +231,23 @@ namespace TrailerAutomationGateway
         }
 
         /// <summary>
+        /// Updates relay states for a client directly (not on a clone).
+        /// </summary>
+        public void UpdateRelayStates(string clientId, Dictionary<string, string> relayStates)
+        {
+            lock (_sync)
+            {
+                if (_clients.TryGetValue(clientId, out var info))
+                {
+                    foreach (var (relayId, state) in relayStates)
+                    {
+                        info.RelayStates[relayId] = state;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
         /// Remove a client from the registry.
         /// </summary>
         public bool RemoveClient(string clientId)

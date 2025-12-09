@@ -128,6 +128,33 @@ namespace TrailerAutomationClientNet
             }
         }
 
+        /// <summary>
+        /// Gets the current state of all relays for heartbeat synchronization.
+        /// </summary>
+        public Dictionary<string, string>? GetCurrentRelayStates()
+        {
+            if (_gpio == null || _relayPins.Count == 0)
+                return null;
+
+            var states = new Dictionary<string, string>();
+
+            foreach (var (relayId, pin) in _relayPins)
+            {
+                try
+                {
+                    var value = _gpio.Read(pin);
+                    states[relayId] = value == PinValue.High ? "on" : "off";
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[GPIO] Error reading state for {relayId}: {ex.Message}");
+                    states[relayId] = "off"; // Default to off on error
+                }
+            }
+
+            return states;
+        }
+
         public void Dispose()
         {
             if (_disposed)

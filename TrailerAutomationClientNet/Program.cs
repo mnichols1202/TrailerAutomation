@@ -11,6 +11,7 @@ namespace TrailerAutomationClientNet
     {
         private static AppConfiguration _config = null!;
         private static HttpClient? _httpClient = null;
+        private static GpioRelayController? _gpioController = null;
 
         static async Task Main(string[] args)
         {
@@ -65,7 +66,8 @@ namespace TrailerAutomationClientNet
 
             // Initialize GPIO controller for relay control
             Console.WriteLine("Initializing GPIO controller...");
-            using var gpioController = new GpioRelayController(_config);
+            _gpioController = new GpioRelayController(_config);
+            var gpioController = _gpioController;
 
             // Initialize button controller for physical button support
             Console.WriteLine("Initializing button controller...");
@@ -101,9 +103,11 @@ namespace TrailerAutomationClientNet
 
                 needsRegistration = await SendHeartbeatAsync(http);
                 
-                // If gateway requests re-registration (e.g., it restarted), re-register immediately
+                // If gateway requests re-registration (e.g., it restarted), send relay states and re-register
                 if (needsRegistration)
                 {
+                    Console.WriteLine("[Heartbeat] Gateway restarted - syncing relay states...");
+                    await SendHeartbeatAsync(http, includeRelayStates: true);
                     Console.WriteLine("[Heartbeat] Re-registering device with gateway...");
                     await RegisterDeviceAsync(http);
                 }
@@ -188,16 +192,34 @@ namespace TrailerAutomationClientNet
             }
         }
 
-        private static async Task<bool> SendHeartbeatAsync(HttpClient http)
+        private static async Task<bool> SendHeartbeatAsync(HttpClient http, bool includeRelayStates = false)
         {
             try
             {
-                var hb = new
+                object hb;
+                
+                // Only include relay states when Gateway requests it (after restart)
+                if (includeRelayStates)
                 {
-                    ClientId = _config.Device.ClientId,
-                    DeviceType = _config.Device.DeviceType,
-                    FriendlyName = _config.Device.FriendlyName
-                };
+                    var relayStates = _gpioController?.GetCurrentRelayStates();
+                    hb = new
+                    {
+                        ClientId = _config.Device.ClientId,
+                        DeviceType = _config.Device.DeviceType,
+                        FriendlyName = _config.Device.FriendlyName,
+                        RelayStates = relayStates
+                    };
+                    Console.WriteLine($"[{DateTime.Now:T}] Heartbeat with relay state sync");
+                }
+                else
+                {
+                    hb = new
+                    {
+                        ClientId = _config.Device.ClientId,
+                        DeviceType = _config.Device.DeviceType,
+                        FriendlyName = _config.Device.FriendlyName
+                    };
+                }
 
                 string json = JsonSerializer.Serialize(hb);
                 using var content = new StringContent(json, Encoding.UTF8, "application/json");

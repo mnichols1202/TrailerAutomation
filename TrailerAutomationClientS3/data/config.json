@@ -4,31 +4,23 @@
     "Password": "J0shua07"
   },
   "Device": {
-    "ClientId": "ESP32-S3-002",
+    "ClientId": "ESP32-S3-001",
     "DeviceType": "ESP32-S3",
-    "FriendlyName": "ESP32 Node 2",
+    "FriendlyName": "ESP32 Node 1",
     "CommandListenerPort": 8888
   },
   "Intervals": {
     "HeartbeatSeconds": 60
   },
   "Hardware": {
-    "Relays": [
+        "Sensors": [
       {
-        "Id": "relay1",
-        "Name": "LED",
-        "Pin": 4,
-        "InitialState": false
-      }
-    ],
-    "Buttons": [
-      {
-        "Id": "button1",
-        "Name": "REmote Button",
-        "Pin": 15,
-        "TargetDevice": "Pi-3B-001",
-        "TargetRelay": "relay3",
-        "Enabled": true
+        "Id": "sht31-main",
+        "Type": "SHT31",
+        "Name": "Temperature & Humidity",
+        "I2cAddress": "0x44",
+        "Enabled": true,
+        "ReadingIntervalSeconds": 300
       }
     ]
   }

@@ -26,4 +26,10 @@ bool getRelayState(const char* relayId, bool* outState);
  */
 void turnOffAllRelays();
 
+/**
+ * Get all relay states as JSON object string for heartbeat
+ * Returns string like: "relay1":"on","relay2":"off"
+ */
+String getAllRelayStatesJson();
+
 #endif // RELAYCONTROL_H

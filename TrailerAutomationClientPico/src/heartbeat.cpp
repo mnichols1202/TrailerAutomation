@@ -9,6 +9,7 @@
 #include "logging.h"
 #include "network.h"
 #include "fsconfig.h"
+#include "relaycontrol.h"
 
 bool sendHeartbeat()
 {
@@ -30,7 +31,7 @@ bool sendHeartbeat()
     // Build URL: http://<gatewayHost>:<port>/api/heartbeat
     String url = String("http://") + getGatewayHost() + ":" + String(getGatewayPort()) + "/api/heartbeat";
 
-    // JSON payload mirroring TrailerAutomationClientNet:
+    // JSON payload - relay states only included when requested by Gateway
     // { "ClientId": "...", "DeviceType": "...", "FriendlyName": "..." }
     String payload;
     payload.reserve(128);
@@ -40,7 +41,7 @@ bool sendHeartbeat()
     payload += config.deviceType;
     payload += "\",\"FriendlyName\":\"";
     payload += config.friendlyName;
-    payload += "\"}";
+    payload += "}";
 
     logLine(String("Sending heartbeat to ") + url);
     logLine(String("Payload: ") + payload);
@@ -86,7 +87,36 @@ bool sendHeartbeat()
     
     if (needsRegistration)
     {
-        logLine("Gateway requests re-registration");
+        logLine("Gateway requests re-registration - syncing relay states...");
+        
+        // Send heartbeat WITH relay states to sync after Gateway restart
+        String relayStates = getAllRelayStatesJson();
+        String syncPayload;
+        syncPayload.reserve(256);
+        syncPayload  = "{\"ClientId\":\"";
+        syncPayload += config.clientId;
+        syncPayload += "\",\"DeviceType\":\"";
+        syncPayload += config.deviceType;
+        syncPayload += "\",\"FriendlyName\":\"";
+        syncPayload += config.friendlyName;
+        syncPayload += "\"";
+        
+        if (relayStates.length() > 0)
+        {
+            syncPayload += ",\"RelayStates\":{";
+            syncPayload += relayStates;
+            syncPayload += "}";
+        }
+        
+        syncPayload += "}";
+        
+        HTTPClient httpSync;
+        httpSync.begin(url);
+        httpSync.addHeader("Content-Type", "application/json");
+        httpSync.POST(reinterpret_cast<uint8_t*>(const_cast<char*>(syncPayload.c_str())), syncPayload.length());
+        httpSync.end();
+        
+        logLine("Relay states synced");
         return true;  // Signal re-registration needed
     }
 

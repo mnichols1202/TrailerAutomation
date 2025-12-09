@@ -128,3 +128,41 @@ void turnOffAllRelays()
         }
     }
 }
+
+String getAllRelayStatesJson()
+{
+    String json = "";
+    
+    if (!isFsConfigLoaded())
+    {
+        return json;
+    }
+    
+    const DeviceConfig& config = getDeviceConfig();
+    bool first = true;
+    
+    for (int i = 0; i < config.relayCount; i++)
+    {
+        const RelayConfig& relay = config.relays[i];
+        
+        if (!relay.enabled)
+        {
+            continue;
+        }
+        
+        if (!first)
+        {
+            json += ",";
+        }
+        first = false;
+        
+        bool state = digitalRead(relay.pin) == HIGH;
+        json += "\"";
+        json += relay.id;
+        json += "\":\"";
+        json += state ? "on" : "off";
+        json += "\"";
+    }
+    
+    return json;
+}

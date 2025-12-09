@@ -128,3 +128,42 @@ void turnOffAllRelays()
         }
     }
 }
+
+String getAllRelayStatesJson()
+{
+    if (!isSdConfigLoaded())
+    {
+        return "";
+    }
+    
+    const DeviceConfig& config = getDeviceConfig();
+    String result = "";
+    
+    for (int i = 0; i < config.relayCount; i++)
+    {
+        const RelayConfig& relay = config.relays[i];
+        
+        if (!relay.enabled)
+        {
+            continue;
+        }
+        
+        // Add comma separator if not first entry
+        if (result.length() > 0)
+        {
+            result += ",";
+        }
+        
+        // Read current GPIO state
+        bool state = digitalRead(relay.pin) == HIGH;
+        
+        // Add JSON key-value: "relayId":"on" or "relayId":"off"
+        result += "\"";
+        result += relay.id;
+        result += "\":\"";
+        result += (state ? "on" : "off");
+        result += "\"";
+    }
+    
+    return result;
+}

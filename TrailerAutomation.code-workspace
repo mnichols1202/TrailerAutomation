@@ -1,14 +1,21 @@
 ﻿{
   "folders": [
     {
+      "name": "TrailerAutomation (Root)",
       "path": "."
+    },
+    {
+      "name": "ClientPico (PlatformIO)",
+      "path": "TrailerAutomationClientPico"
+    },
+    {
+      "name": "ClientS3 (PlatformIO)",
+      "path": "TrailerAutomationClientS3"
     }
   ],
   "settings": {
     "platformio-ide.activateOnlyOnPlatformIOProject": false,
-    "platformio-ide.autoProjectEnable": true,
     "dotnet.server.useOmnisharp": false,
-    "omnisharp.enableRoslynAnalyzers": true,
     "files.exclude": {
       "**/bin": true,
       "**/obj": true,
