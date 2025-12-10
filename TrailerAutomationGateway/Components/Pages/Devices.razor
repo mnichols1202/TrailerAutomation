@@ -126,6 +126,13 @@
                                     title="View Configuration">
                                 ℹ️ Info
                             </button>
+                            <button class="refresh-btn" 
+                                    style="background: #6f42c1; color: white; padding: 5px 10px; margin-left: 5px;" 
+                                    @onclick="() => EditDeviceConfig(device.DeviceId)"
+                                    disabled="@(!isOnline)"
+                                    title="Edit Configuration">
+                                📝 Edit Config
+                            </button>
                         </td>
                     </tr>
                     @if (_commandResults.ContainsKey(device.DeviceId))
@@ -178,6 +185,60 @@
     </div>
 }
 
+@if (_showConfigEditor)
+{
+    <div class="modal-overlay" @onclick="CloseConfigEditor">
+        <div class="modal-content" style="width: 90%; max-width: 800px;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>📝 Edit Configuration - @_editingDeviceId</h3>
+                <button class="modal-close" @onclick="CloseConfigEditor">✖</button>
+            </div>
+            <div class="modal-body">
+                @if (_configLoading)
+                {
+                    <p style="text-align: center; padding: 20px;">⏳ Loading configuration...</p>
+                }
+                else if (!string.IsNullOrEmpty(_configError))
+                {
+                    <p style="color: #dc3545; padding: 20px;">❌ @_configError</p>
+                    <button class="refresh-btn" @onclick="() => EditDeviceConfig(_editingDeviceId!)">🔄 Retry</button>
+                }
+                else
+                {
+                    <textarea @bind="_editedConfig" 
+                              style="width: 100%; height: 500px; font-family: 'Courier New', monospace; font-size: 13px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;"
+                              spellcheck="false"></textarea>
+                    
+                    @if (!string.IsNullOrEmpty(_saveError))
+                    {
+                        <p style="color: #dc3545; margin-top: 10px;">❌ Save Error: @_saveError</p>
+                    }
+                    @if (!string.IsNullOrEmpty(_saveSuccess))
+                    {
+                        <p style="color: #28a745; margin-top: 10px;">✅ @_saveSuccess</p>
+                    }
+                    
+                    <div style="margin-top: 15px; text-align: right;">
+                        <button class="refresh-btn" @onclick="CloseConfigEditor" style="background: #6c757d; margin-right: 10px;">
+                            Cancel
+                        </button>
+                        <button class="refresh-btn" @onclick="SaveConfig" style="background: #28a745;" disabled="@_saving">
+                            @if (_saving)
+                            {
+                                <span>⏳ Saving...</span>
+                            }
+                            else
+                            {
+                                <span>💾 Save</span>
+                            }
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
 <div class="card">
     <h2>ℹ️ Information</h2>
     <p style="color: #7f8c8d;">
@@ -199,9 +260,15 @@
     private string _reInitMessage = string.Empty;
     private bool _reInitSuccess = false;
     private bool _showConfigModal = false;
+    private bool _showConfigEditor = false;
     private bool _configLoading = false;
+    private bool _saving = false;
     private string _deviceConfig = string.Empty;
+    private string _editedConfig = string.Empty;
     private string _configError = string.Empty;
+    private string _saveError = string.Empty;
+    private string _saveSuccess = string.Empty;
+    private string? _editingDeviceId = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -602,6 +669,112 @@
         StateHasChanged();
     }
 
+    private async Task EditDeviceConfig(string deviceId)
+    {
+        _editingDeviceId = deviceId;
+        _showConfigEditor = true;
+        _configLoading = true;
+        _editedConfig = string.Empty;
+        _configError = string.Empty;
+        _saveError = string.Empty;
+        _saveSuccess = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var httpClient = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
+            var response = await httpClient.GetAsync($"/api/devices/{deviceId}/config");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<GetConfigResponse>();
+                if (result != null && !string.IsNullOrEmpty(result.ConfigJson))
+                {
+                    // Pretty-print the JSON
+                    var jsonDoc = System.Text.Json.JsonDocument.Parse(result.ConfigJson);
+                    _editedConfig = System.Text.Json.JsonSerializer.Serialize(jsonDoc, 
+                        new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                }
+                else
+                {
+                    _configError = "Empty configuration received";
+                }
+            }
+            else
+            {
+                _configError = $"Failed to load config: {response.ReasonPhrase}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _configError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _configLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveConfig()
+    {
+        _saving = true;
+        _saveError = string.Empty;
+        _saveSuccess = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            // Validate JSON
+            try
+            {
+                System.Text.Json.JsonDocument.Parse(_editedConfig);
+            }
+            catch (System.Text.Json.JsonException ex)
+            {
+                _saveError = $"Invalid JSON: {ex.Message}";
+                _saving = false;
+                StateHasChanged();
+                return;
+            }
+
+            var httpClient = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
+            var payload = new SetConfigPayload { ConfigJson = _editedConfig };
+            var response = await httpClient.PostAsJsonAsync($"/api/devices/{_editingDeviceId}/config", payload);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                _saveSuccess = "Configuration saved successfully! Device will use new config.";
+                await Task.Delay(2000);
+                CloseConfigEditor();
+            }
+            else
+            {
+                var errorText = await response.Content.ReadAsStringAsync();
+                _saveError = $"Failed to save: {errorText}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _saveError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CloseConfigEditor()
+    {
+        _showConfigEditor = false;
+        _editingDeviceId = null;
+        _editedConfig = string.Empty;
+        _saveError = string.Empty;
+        _saveSuccess = string.Empty;
+        StateHasChanged();
+    }
+
     public void Dispose()
     {
         ClientRegistry.OnRelayStateChanged -= HandleRelayStateChanged;
@@ -632,5 +805,10 @@
     {
         public string Id { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
+    }
+
+    private class GetConfigResponse
+    {
+        public string ConfigJson { get; set; } = string.Empty;
     }
 }

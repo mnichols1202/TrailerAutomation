@@ -323,7 +323,7 @@ bool registerDevice()
         }
     }
     
-    // Add relay info for UI
+    // Add relay info with current states for UI
     if (config.relayCount > 0)
     {
         JsonArray relays = doc["Relays"].to<JsonArray>();
@@ -332,9 +332,13 @@ bool registerDevice()
             const RelayConfig& relay = config.relays[i];
             if (relay.enabled)
             {
+                bool state = false;
+                getRelayState(relay.id, &state);
+                
                 JsonObject r = relays.add<JsonObject>();
                 r["Id"] = relay.id;
                 r["Name"] = relay.name;
+                r["State"] = state ? "on" : "off";
             }
         }
     }

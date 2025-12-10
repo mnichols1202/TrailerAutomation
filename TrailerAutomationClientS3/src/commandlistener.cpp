@@ -4,6 +4,8 @@
 #include "logging.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
+#include <FS.h>
+#include <LittleFS.h>
 
 static WiFiServer* g_commandServer = nullptr;
 static bool g_listenerInitialized = false;
@@ -333,6 +335,76 @@ void processCommandListener()
         }
         
         logLine("[CommandListener] GetConfig command received, returning configuration");
+    }
+    else if (strcmp(commandType, "getConfigRaw") == 0)
+    {
+        // Return raw config.json file content as string (for editing)
+        auto configFile = LittleFS.open("/config.json", "r");
+        if (!configFile)
+        {
+            respDoc["success"] = false;
+            respDoc["message"] = "Failed to open config.json";
+            respDoc["errorCode"] = "FILE_ERROR";
+            logLine("[CommandListener] ERROR: Failed to open /config.json");
+        }
+        else
+        {
+            String configJson = configFile.readString();
+            configFile.close();
+            
+            respDoc["success"] = true;
+            respDoc["message"] = "Configuration file retrieved";
+            
+            JsonObject data = respDoc["data"].to<JsonObject>();
+            data["configJson"] = configJson;
+            
+            logLine("[CommandListener] GetConfigRaw command received, returning config.json (" + String(configJson.length()) + " bytes)");
+        }
+    }
+    else if (strcmp(commandType, "setConfig") == 0)
+    {
+        // Write raw config.json file content (for editing)
+        JsonObject payload = cmdDoc["payload"];
+        
+        if (!payload)
+        {
+            respDoc["success"] = false;
+            respDoc["message"] = "Missing payload";
+            respDoc["errorCode"] = "MISSING_PAYLOAD";
+        }
+        else
+        {
+            const char* configJson = payload["configJson"];
+            
+            if (!configJson)
+            {
+                respDoc["success"] = false;
+                respDoc["message"] = "Invalid payload: configJson required";
+                respDoc["errorCode"] = "INVALID_PAYLOAD";
+            }
+            else
+            {
+                // Write to file
+                auto configFile = LittleFS.open("/config.json", "w");
+                if (!configFile)
+                {
+                    respDoc["success"] = false;
+                    respDoc["message"] = "Failed to open config.json for writing";
+                    respDoc["errorCode"] = "FILE_ERROR";
+                    logLine("[CommandListener] ERROR: Failed to open /config.json for writing");
+                }
+                else
+                {
+                    configFile.print(configJson);
+                    configFile.close();
+                    
+                    respDoc["success"] = true;
+                    respDoc["message"] = "Configuration file updated. Reboot required for changes to take effect.";
+                    
+                    logLine("[CommandListener] SetConfig command received, config.json updated (" + String(strlen(configJson)) + " bytes)");
+                }
+            }
+        }
     }
     else
     {

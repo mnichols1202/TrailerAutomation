@@ -86,19 +86,48 @@ namespace TrailerAutomationGateway
                     if (_serviceDiscovery != null && _profile != null)
                     {
                         Console.WriteLine("[mDNS] Unadvertising profile.");
-                        _serviceDiscovery.Unadvertise(_profile);
+                        
+                        // Wrap in timeout to prevent hanging
+                        var unadvertiseTask = Task.Run(() => _serviceDiscovery.Unadvertise(_profile));
+                        if (!unadvertiseTask.Wait(TimeSpan.FromSeconds(2)))
+                        {
+                            Console.WriteLine("[mDNS] Unadvertise timeout after 2 seconds, forcing cleanup");
+                        }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[mDNS] Unadvertise error: {ex.Message}");
+                }
                 finally
                 {
                     _profile = null;
-                    _serviceDiscovery?.Dispose();
+                    
+                    try
+                    {
+                        _serviceDiscovery?.Dispose();
+                    }
+                    catch { }
                     _serviceDiscovery = null;
+                    
                     if (_mdns != null)
                     {
-                        try { _mdns.Stop(); } catch { }
-                        _mdns.Dispose();
+                        try 
+                        { 
+                            // Stop with timeout
+                            var stopTask = Task.Run(() => _mdns.Stop());
+                            if (!stopTask.Wait(TimeSpan.FromSeconds(2)))
+                            {
+                                Console.WriteLine("[mDNS] Stop timeout after 2 seconds, forcing disposal");
+                            }
+                        } 
+                        catch { }
+                        
+                        try
+                        {
+                            _mdns.Dispose();
+                        }
+                        catch { }
                         _mdns = null;
                     }
                 }

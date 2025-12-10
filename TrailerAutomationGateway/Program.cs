@@ -1,6 +1,7 @@
 using Microsoft.OpenApi.Models;
 using TrailerAutomationGateway;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +10,12 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 builder.Logging.AddFilter("Microsoft.AspNetCore.Watch.BrowserRefresh", LogLevel.None); // Suppress browser refresh noise
+
+// Configure application shutdown timeout
+builder.Services.Configure<HostOptions>(options =>
+{
+    options.ShutdownTimeout = TimeSpan.FromSeconds(5);
+});
 
 // Fixed HTTP port for the gateway
 const int gatewayPort = 5000;
@@ -387,6 +394,84 @@ app.MapPost("/api/devices/{clientId}/commands/syncState", async (
     });
 })
 .WithName("SyncDeviceState")
+.WithOpenApi();
+
+// Get device configuration (config.json)
+app.MapGet("/api/devices/{clientId}/config", async (
+    string clientId,
+    DeviceCommandService commandService) =>
+{
+    Console.WriteLine($"[Device] GET /api/devices/{clientId}/config {DateTime.UtcNow:O}");
+
+    // Send getConfigRaw command to device
+    var command = new DeviceCommand
+    {
+        CommandId = Guid.NewGuid().ToString(),
+        Type = "getConfigRaw",
+        Payload = JsonDocument.Parse("{}").RootElement
+    };
+
+    var result = await commandService.SendCommandAsync(clientId, command);
+
+    if (result.Success && result.Data != null)
+    {
+        // Data is stored as JsonElement, parse it to get configJson field
+        var dataJson = JsonSerializer.Serialize(result.Data);
+        var dataElement = JsonDocument.Parse(dataJson).RootElement;
+        
+        if (dataElement.TryGetProperty("configJson", out var configJson))
+        {
+            return Results.Ok(new { configJson = configJson.GetString() });
+        }
+        return Results.Problem("Device response missing configJson field");
+    }
+    else
+    {
+        return Results.Problem(result.Message ?? "Failed to retrieve config");
+    }
+})
+.WithName("GetDeviceConfig")
+.WithOpenApi();
+
+// Update device configuration (config.json)
+app.MapPost("/api/devices/{clientId}/config", async (
+    string clientId,
+    SetConfigPayload request,
+    DeviceCommandService commandService) =>
+{
+    Console.WriteLine($"[Device] POST /api/devices/{clientId}/config {DateTime.UtcNow:O}");
+
+    // Validate JSON
+    try
+    {
+        JsonDocument.Parse(request.ConfigJson);
+    }
+    catch (JsonException ex)
+    {
+        return Results.BadRequest(new { error = "Invalid JSON", details = ex.Message });
+    }
+
+    // Send setConfig command to device
+    var payload = new { configJson = request.ConfigJson };
+    var command = new DeviceCommand
+    {
+        CommandId = Guid.NewGuid().ToString(),
+        Type = "setConfig",
+        Payload = JsonSerializer.SerializeToElement(payload)
+    };
+
+    var result = await commandService.SendCommandAsync(clientId, command);
+
+    if (result.Success)
+    {
+        return Results.Ok(new { success = true, message = result.Message ?? "Config updated successfully" });
+    }
+    else
+    {
+        return Results.Problem(result.Message ?? "Failed to update config");
+    }
+})
+.WithName("SetDeviceConfig")
 .WithOpenApi();
 
 // Receive temperature and humidity readings from a client

@@ -139,12 +139,30 @@ namespace TrailerAutomationGateway
                     info.Capabilities = capabilities ?? Array.Empty<string>();
                     info.Relays = relays;
                     info.LastHeartbeatUtc = now;
+                    
+                    // Update relay states from registration if provided
+                    if (relays != null)
+                    {
+                        foreach (var relay in relays)
+                        {
+                            if (!string.IsNullOrEmpty(relay.State))
+                            {
+                                info.RelayStates[relay.Id] = relay.State;
+                            }
+                        }
+                    }
 
                     Console.WriteLine(
                         $"[ClientRegistry][DEVICE_UPDATE] {clientId} " +
                         $"IP={info.RemoteIp ?? "n/a"} " +
                         $"Port={commandPort} " +
                         $"Capabilities=[{string.Join(", ", capabilities ?? Array.Empty<string>())}]");
+                    
+                    // If relays were provided, notify UI to refresh
+                    if (relays != null && relays.Length > 0)
+                    {
+                        OnRelayStateChanged?.Invoke();
+                    }
                 }
                 else
                 {
@@ -163,12 +181,30 @@ namespace TrailerAutomationGateway
                     };
 
                     _clients[clientId] = info;
+                    
+                    // Initialize relay states from registration if provided
+                    if (relays != null)
+                    {
+                        foreach (var relay in relays)
+                        {
+                            if (!string.IsNullOrEmpty(relay.State))
+                            {
+                                info.RelayStates[relay.Id] = relay.State;
+                            }
+                        }
+                    }
 
                     Console.WriteLine(
                         $"[ClientRegistry][DEVICE_NEW] {clientId} " +
                         $"IP={ipAddress ?? "n/a"} " +
                         $"Port={commandPort} " +
                         $"Capabilities=[{string.Join(", ", capabilities ?? Array.Empty<string>())}]");
+                    
+                    // If relays were provided, notify UI to refresh
+                    if (relays != null && relays.Length > 0)
+                    {
+                        OnRelayStateChanged?.Invoke();
+                    }
                 }
             }
         }

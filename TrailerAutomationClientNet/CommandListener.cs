@@ -195,6 +195,14 @@ namespace TrailerAutomationClientNet
                     {
                         response = HandleGetConfigCommand(commandId);
                     }
+                    else if (commandType == "getConfigRaw")
+                    {
+                        response = HandleGetConfigRawCommand(commandId);
+                    }
+                    else if (commandType == "setConfig")
+                    {
+                        response = HandleSetConfigCommand(root, commandId);
+                    }
                     else
                     {
                         response = new
@@ -468,5 +476,126 @@ namespace TrailerAutomationClientNet
                 };
             }
         }
+
+        private object HandleGetConfigRawCommand(string? commandId)
+        {
+            try
+            {
+                Console.WriteLine($"[CommandListener] GetConfigRaw command received");
+
+                // Read raw config.json file
+                string configPath = "config.json";
+                
+                if (!File.Exists(configPath))
+                {
+                    return new
+                    {
+                        commandId = commandId,
+                        success = false,
+                        message = "config.json file not found",
+                        errorCode = "FILE_NOT_FOUND"
+                    };
+                }
+
+                string configJson = File.ReadAllText(configPath);
+
+                return new
+                {
+                    commandId = commandId,
+                    success = true,
+                    message = "Configuration file retrieved",
+                    data = new
+                    {
+                        configJson = configJson
+                    }
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CommandListener] GetConfigRaw error: {ex.Message}");
+                return new
+                {
+                    commandId = commandId,
+                    success = false,
+                    message = $"Error: {ex.Message}",
+                    errorCode = "EXECUTION_ERROR"
+                };
+            }
+        }
+
+        private object HandleSetConfigCommand(JsonElement root, string? commandId)
+        {
+            try
+            {
+                Console.WriteLine($"[CommandListener] SetConfig command received");
+
+                // Extract payload
+                if (!root.TryGetProperty("payload", out JsonElement payload))
+                {
+                    return new
+                    {
+                        commandId = commandId,
+                        success = false,
+                        message = "Missing payload",
+                        errorCode = "MISSING_PAYLOAD"
+                    };
+                }
+
+                if (!payload.TryGetProperty("configJson", out JsonElement configJsonElement))
+                {
+                    return new
+                    {
+                        commandId = commandId,
+                        success = false,
+                        message = "Invalid payload: configJson required",
+                        errorCode = "INVALID_PAYLOAD"
+                    };
+                }
+
+                string configJson = configJsonElement.GetString() ?? "";
+
+                // Validate JSON before writing
+                try
+                {
+                    JsonDocument.Parse(configJson);
+                }
+                catch (JsonException ex)
+                {
+                    return new
+                    {
+                        commandId = commandId,
+                        success = false,
+                        message = $"Invalid JSON: {ex.Message}",
+                        errorCode = "INVALID_JSON"
+                    };
+                }
+
+                // Write to file
+                string configPath = "config.json";
+                File.WriteAllText(configPath, configJson);
+
+                Console.WriteLine($"[CommandListener] SetConfig wrote {configJson.Length} bytes to config.json");
+
+                return new
+                {
+                    commandId = commandId,
+                    success = true,
+                    message = $"Configuration updated ({configJson.Length} bytes). Device will reload config on next restart.",
+                    data = new { }
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CommandListener] SetConfig error: {ex.Message}");
+                return new
+                {
+                    commandId = commandId,
+                    success = false,
+                    message = $"Error: {ex.Message}",
+                    errorCode = "EXECUTION_ERROR"
+                };
+            }
+        }
     }
 }
+

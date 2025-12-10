@@ -4,6 +4,7 @@
 #include "logging.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
+#include <LittleFS.h>
 
 static WiFiServer* g_commandServer = nullptr;
 static bool g_listenerInitialized = false;
@@ -314,7 +315,7 @@ void processCommandListener()
     }
     else if (strcmp(commandType, "getConfig") == 0)
     {
-        // Return device configuration
+        // Return device configuration as structured data (for Info display)
         const DeviceConfig& config = getDeviceConfig();
         
         respDoc["success"] = true;
@@ -333,10 +334,6 @@ void processCommandListener()
         JsonObject intervals = data["intervals"].to<JsonObject>();
         intervals["heartbeatSeconds"] = config.heartbeatSeconds;
         
-        // Gateway section (Pico doesn't have this in config, but include for consistency)
-        JsonObject gateway = data["gateway"].to<JsonObject>();
-        gateway["discoveryTimeoutSeconds"] = 8;  // Default timeout
-        
         // Relays section
         JsonArray relays = data["relays"].to<JsonArray>();
         for (int i = 0; i < config.relayCount; i++)
@@ -346,6 +343,7 @@ void processCommandListener()
             relay["name"] = config.relays[i].name;
             relay["pin"] = config.relays[i].pin;
             relay["initialState"] = config.relays[i].initialState;
+            relay["enabled"] = config.relays[i].enabled;
         }
         
         // Sensors section
@@ -375,6 +373,90 @@ void processCommandListener()
         }
         
         logLine("[CommandListener] GetConfig command received, returning configuration");
+    }
+    else if (strcmp(commandType, "getConfigRaw") == 0)
+    {
+        // Return raw config.json file content as string (for editing)
+        File configFile = LittleFS.open("/config.json", "r");
+        if (!configFile)
+        {
+            respDoc["success"] = false;
+            respDoc["message"] = "Failed to open config.json";
+            respDoc["errorCode"] = "FILE_ERROR";
+            logLine("[CommandListener] ERROR: Failed to open /config.json");
+        }
+        else
+        {
+            String configJson = configFile.readString();
+            configFile.close();
+            
+            respDoc["success"] = true;
+            respDoc["message"] = "Configuration file retrieved";
+            
+            JsonObject data = respDoc["data"].to<JsonObject>();
+            data["configJson"] = configJson;
+            
+            logLine("[CommandListener] GetConfigRaw command received, returning config.json (" + String(configJson.length()) + " bytes)");
+        }
+    }
+    else if (strcmp(commandType, "setConfig") == 0)
+    {
+        // Write new config.json file
+        JsonObject payload = cmdDoc["payload"];
+        
+        if (!payload)
+        {
+            respDoc["success"] = false;
+            respDoc["message"] = "Missing payload";
+            respDoc["errorCode"] = "MISSING_PAYLOAD";
+        }
+        else
+        {
+            const char* configJson = payload["configJson"];
+            
+            if (!configJson)
+            {
+                respDoc["success"] = false;
+                respDoc["message"] = "Invalid payload: configJson required";
+                respDoc["errorCode"] = "INVALID_PAYLOAD";
+            }
+            else
+            {
+                // Validate JSON before writing
+                JsonDocument testDoc;
+                DeserializationError error = deserializeJson(testDoc, configJson);
+                
+                if (error)
+                {
+                    respDoc["success"] = false;
+                    respDoc["message"] = String("Invalid JSON: ") + error.c_str();
+                    respDoc["errorCode"] = "INVALID_JSON";
+                    logLine("[CommandListener] SetConfig failed: Invalid JSON");
+                }
+                else
+                {
+                    // Write to file
+                    File configFile = LittleFS.open("/config.json", "w");
+                    if (!configFile)
+                    {
+                        respDoc["success"] = false;
+                        respDoc["message"] = "Failed to open config.json for writing";
+                        respDoc["errorCode"] = "FILE_ERROR";
+                        logLine("[CommandListener] ERROR: Failed to open /config.json for writing");
+                    }
+                    else
+                    {
+                        size_t bytesWritten = configFile.print(configJson);
+                        configFile.close();
+                        
+                        respDoc["success"] = true;
+                        respDoc["message"] = String("Configuration updated (") + bytesWritten + " bytes). Device will reload config on next restart.";
+                        
+                        logLine("[CommandListener] SetConfig command received, wrote " + String(bytesWritten) + " bytes to /config.json");
+                    }
+                }
+            }
+        }
     }
     else
     {

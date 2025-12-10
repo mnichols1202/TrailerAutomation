@@ -84,7 +84,7 @@ namespace TrailerAutomationClientNet
             var needsRegistration = await SendHeartbeatAsync(http);
 
             // Register device with gateway (includes command port and capabilities)
-            if (needsRegistration || true) // Always register on startup
+            if (needsRegistration == true || true) // Always register on startup
             {
                 await RegisterDeviceAsync(http);
             }
@@ -335,9 +335,14 @@ namespace TrailerAutomationClientNet
                     capabilities.Add("button");
                 }
 
-                // Build relay info list (Id and Name only for UI)
+                // Build relay info list with current states
                 var relays = _config.Hardware.Relays
-                    .Select(r => new { Id = r.Id, Name = r.Name })
+                    .Select(r => new 
+                    { 
+                        Id = r.Id, 
+                        Name = r.Name,
+                        State = _gpioController?.GetRelayState(r.Id) ?? "off"
+                    })
                     .ToArray();
 
                 var registration = new
