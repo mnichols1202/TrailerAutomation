@@ -11,7 +11,7 @@
 #include "sdconfig.h"
 #include "relaycontrol.h"
 
-bool sendHeartbeat()
+bool sendHeartbeat(bool wasRegistered)
 {
     if (!isGatewayKnown())
     {
@@ -31,17 +31,14 @@ bool sendHeartbeat()
     // Build URL: http://<gatewayHost>:<port>/api/heartbeat
     String url = String("http://") + getGatewayHost() + ":" + String(getGatewayPort()) + "/api/heartbeat";
 
-    // JSON payload - relay states only included when requested by Gateway
-    // { "ClientId": "...", "DeviceType": "...", "FriendlyName": "..." }
+    // Build JSON payload using ArduinoJson for proper serialization
+    JsonDocument doc;
+    doc["ClientId"] = config.clientId;
+    doc["DeviceType"] = config.deviceType;
+    doc["FriendlyName"] = config.friendlyName;
+    
     String payload;
-    payload.reserve(128);
-    payload  = "{\"ClientId\":\"";
-    payload += config.clientId;
-    payload += "\",\"DeviceType\":\"";
-    payload += config.deviceType;
-    payload += "\",\"FriendlyName\":\"";
-    payload += config.friendlyName;
-    payload += "}";
+    serializeJson(doc, payload);
 
     logLine(String("Sending heartbeat to ") + url);
     logLine(String("Payload: ") + payload);
@@ -74,8 +71,8 @@ bool sendHeartbeat()
     }
 
     // Parse JSON response to check for "needsRegistration": true
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, response);
+    JsonDocument responseDoc;
+    DeserializationError error = deserializeJson(responseDoc, response);
     
     if (error)
     {
@@ -83,42 +80,51 @@ bool sendHeartbeat()
         return false;  // Assume no re-registration if can't parse
     }
 
-    bool needsRegistration = doc["needsRegistration"] | false;
+    bool needsRegistration = responseDoc["needsRegistration"] | false;
     
     if (needsRegistration)
     {
-        logLine("Gateway requests re-registration - syncing relay states...");
-        
-        // Send heartbeat WITH relay states to sync after Gateway restart
-        String relayStates = getAllRelayStatesJson();
-        String syncPayload;
-        syncPayload.reserve(256);
-        syncPayload  = "{\"ClientId\":\"";
-        syncPayload += config.clientId;
-        syncPayload += "\",\"DeviceType\":\"";
-        syncPayload += config.deviceType;
-        syncPayload += "\",\"FriendlyName\":\"";
-        syncPayload += config.friendlyName;
-        syncPayload += "\"";
-        
-        if (relayStates.length() > 0)
+        // Only sync relay states if this is a RE-registration (was previously registered)
+        if (wasRegistered)
         {
-            syncPayload += ",\"RelayStates\":{";
-            syncPayload += relayStates;
-            syncPayload += "}";
+            logLine("Gateway requests re-registration - syncing relay states...");
+            
+            // Send heartbeat WITH relay states to sync after Gateway restart
+            JsonDocument syncDoc;
+            syncDoc["ClientId"] = config.clientId;
+            syncDoc["DeviceType"] = config.deviceType;
+            syncDoc["FriendlyName"] = config.friendlyName;
+            
+            // Add relay states if any
+            String relayStates = getAllRelayStatesJson();
+            if (relayStates.length() > 0)
+            {
+                // Parse relay states JSON and add to document
+                JsonDocument relayDoc;
+                deserializeJson(relayDoc, "{" + relayStates + "}");
+                syncDoc["RelayStates"] = relayDoc;
+            }
+            
+            String syncPayload;
+            serializeJson(syncDoc, syncPayload);
+            
+            HTTPClient httpSync;
+            httpSync.begin(url);
+            httpSync.addHeader("Content-Type", "application/json");
+            httpSync.POST(reinterpret_cast<uint8_t*>(const_cast<char*>(syncPayload.c_str())), syncPayload.length());
+            httpSync.end();
+            
+            logLine("Relay states synced - re-registration needed");
+        }
+        else
+        {
+            logLine("Gateway requests initial registration (skipping relay state sync)");
         }
         
-        syncPayload += "}";
-        
-        HTTPClient httpSync;
-        httpSync.begin(url);
-        httpSync.addHeader("Content-Type", "application/json");
-        httpSync.POST(reinterpret_cast<uint8_t*>(const_cast<char*>(syncPayload.c_str())), syncPayload.length());
-        httpSync.end();
-        
-        logLine("Relay states synced");
-        return true;  // Signal re-registration needed
+        // Set global flag for main loop to handle registration
+        extern bool g_deviceRegistered;
+        g_deviceRegistered = false;
     }
 
-    return false;  // Heartbeat OK, no re-registration needed
+    return true;  // Heartbeat succeeded (may need re-registration, checked via g_deviceRegistered)
 }

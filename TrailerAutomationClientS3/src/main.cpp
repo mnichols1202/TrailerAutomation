@@ -19,6 +19,10 @@ static unsigned long g_bootDelayStartMs = 0;
 static bool g_bootDelayComplete = false;
 bool g_deviceRegistered = false;  // Non-static so commandlistener can access
 
+// Gateway reconnection tracking
+static int g_consecutiveHeartbeatFailures = 0;
+static const int MAX_FAILURES_BEFORE_REDISCOVERY = 3;
+
 // Intervals from config (will be loaded from LittleFS)
 static unsigned long g_heartbeatIntervalMs = 60000UL; // Default 60s
 
@@ -248,17 +252,42 @@ void loop()
     // 6. Heartbeat timing
     if (now - g_lastHeartbeatMs >= g_heartbeatIntervalMs)
     {
-        // sendHeartbeat() returns true if gateway requests re-registration
-        // Returns false on success (no re-registration needed)
-        // On failure, HTTP error is logged but we treat it like no re-registration
-        bool needsRegistration = sendHeartbeat();
+        // sendHeartbeat() returns true on success
+        // Pass g_deviceRegistered so it knows whether to sync relay states on re-registration
+        bool heartbeatSuccess = sendHeartbeat(g_deviceRegistered);
         
-        if (needsRegistration)
+        if (heartbeatSuccess)
         {
-            // Gateway requests re-registration (e.g., gateway restarted)
-            logLine("Gateway requests re-registration...");
-            g_deviceRegistered = false;  // Mark as needing registration
+            // Heartbeat succeeded - reset failure counter
+            g_consecutiveHeartbeatFailures = 0;
+            consecutiveFailures = 0;
+            lastSuccessfulComm = now;
+            clearLedError();
+        }
+        else
+        {
+            // Heartbeat failed
+            g_consecutiveHeartbeatFailures++;
+            consecutiveFailures++;
+            logLine("Heartbeat failed (" + String(g_consecutiveHeartbeatFailures) + "/" + 
+                    String(MAX_FAILURES_BEFORE_REDISCOVERY) + ")");
             
+            if (g_consecutiveHeartbeatFailures >= MAX_FAILURES_BEFORE_REDISCOVERY)
+            {
+                logLine("Gateway unreachable - attempting mDNS re-discovery...");
+                forgetGateway();  // Clear cached Gateway info
+                g_deviceRegistered = false;
+                g_consecutiveHeartbeatFailures = 0;  // Reset to avoid constant rediscovery
+                
+                // Next loop iteration will trigger discovery in step 2
+                setLedError(ERROR_MDNS);
+            }
+        }
+        
+        // Check if gateway requests re-registration (handled inside sendHeartbeat now)
+        if (!g_deviceRegistered && isGatewayKnown())
+        {
+            // Re-registration needed
             if (registerDevice())
             {
                 g_deviceRegistered = true;
@@ -270,22 +299,6 @@ void loop()
                     logLine("Command listener failed to restart");
                 }
             }
-            else
-            {
-                logLine("Re-registration failed, will retry");
-            }
-            
-            clearLedError();  // Clear error - heartbeat succeeded
-            consecutiveFailures = 0;  // Reset failure counter
-            lastSuccessfulComm = now;
-        }
-        else
-        {
-            // Heartbeat completed (either success or failure)
-            // Check response body for success indication
-            clearLedError();
-            consecutiveFailures = 0;
-            lastSuccessfulComm = now;
         }
         
         g_lastHeartbeatMs = now;

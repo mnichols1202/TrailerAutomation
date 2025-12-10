@@ -96,6 +96,9 @@ namespace TrailerAutomationClientNet
             Console.WriteLine("Starting heartbeat loop...");
 
             var heartbeatInterval = TimeSpan.FromSeconds(_config.Intervals.HeartbeatSeconds);
+            int consecutiveFailures = 0;
+            const int maxFailuresBeforeRediscovery = 3;
+            bool hasRegistered = true; // Track if we've completed initial registration
 
             while (!cts.Token.IsCancellationRequested)
             {
@@ -103,13 +106,65 @@ namespace TrailerAutomationClientNet
 
                 needsRegistration = await SendHeartbeatAsync(http);
                 
-                // If gateway requests re-registration (e.g., it restarted), send relay states and re-register
-                if (needsRegistration)
+                if (needsRegistration == null)
                 {
-                    Console.WriteLine("[Heartbeat] Gateway restarted - syncing relay states...");
-                    await SendHeartbeatAsync(http, includeRelayStates: true);
-                    Console.WriteLine("[Heartbeat] Re-registering device with gateway...");
-                    await RegisterDeviceAsync(http);
+                    // Heartbeat failed (network error, timeout, etc.)
+                    consecutiveFailures++;
+                    Console.WriteLine($"[Heartbeat] Failed ({consecutiveFailures}/{maxFailuresBeforeRediscovery})");
+                    
+                    if (consecutiveFailures >= maxFailuresBeforeRediscovery)
+                    {
+                        Console.WriteLine("[Heartbeat] Gateway unreachable - attempting mDNS re-discovery...");
+                        
+                        var newGatewayUri = await GatewayDiscovery.DiscoverAsync(
+                            TimeSpan.FromSeconds(_config.Gateway.DiscoveryTimeoutSeconds));
+                        
+                        if (newGatewayUri != null && newGatewayUri != _httpClient.BaseAddress)
+                        {
+                            Console.WriteLine($"[Heartbeat] Gateway moved: {_httpClient.BaseAddress} -> {newGatewayUri}");
+                            _httpClient.BaseAddress = newGatewayUri;
+                            http = _httpClient;
+                            consecutiveFailures = 0;
+                            
+                            // Re-register with new Gateway location
+                            await SendHeartbeatAsync(http, includeRelayStates: true);
+                            await RegisterDeviceAsync(http);
+                        }
+                        else if (newGatewayUri != null)
+                        {
+                            Console.WriteLine($"[Heartbeat] Gateway still at {newGatewayUri}");
+                            consecutiveFailures = 0; // Reset but Gateway still unreachable
+                        }
+                        else
+                        {
+                            Console.WriteLine("[Heartbeat] mDNS re-discovery failed - Gateway offline");
+                            consecutiveFailures = 0; // Reset to avoid spamming discovery
+                        }
+                    }
+                }
+                else
+                {
+                    // Heartbeat succeeded
+                    consecutiveFailures = 0;
+                    
+                    // If gateway requests re-registration (e.g., it restarted), send relay states and re-register
+                    if (needsRegistration.Value)
+                    {
+                        // Only sync relay states if we've previously registered (this is a RE-registration)
+                        if (hasRegistered)
+                        {
+                            Console.WriteLine("[Heartbeat] Gateway restarted - syncing relay states...");
+                            await SendHeartbeatAsync(http, includeRelayStates: true);
+                        }
+                        else
+                        {
+                            Console.WriteLine("[Heartbeat] Initial registration requested");
+                        }
+                        
+                        Console.WriteLine("[Heartbeat] Re-registering device with gateway...");
+                        await RegisterDeviceAsync(http);
+                        hasRegistered = true;
+                    }
                 }
             }
             
@@ -192,7 +247,7 @@ namespace TrailerAutomationClientNet
             }
         }
 
-        private static async Task<bool> SendHeartbeatAsync(HttpClient http, bool includeRelayStates = false)
+        private static async Task<bool?> SendHeartbeatAsync(HttpClient http, bool includeRelayStates = false)
         {
             try
             {
@@ -251,7 +306,7 @@ namespace TrailerAutomationClientNet
             catch (Exception ex)
             {
                 Console.WriteLine($"[{DateTime.Now:T}] Heartbeat failed: {ex.Message}");
-                return false;
+                return null; // null = network failure, bool = success with/without re-registration
             }
         }
 
