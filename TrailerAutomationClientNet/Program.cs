@@ -202,10 +202,19 @@ namespace TrailerAutomationClientNet
                         var interval = TimeSpan.FromSeconds(sensorConfig.ReadingIntervalSeconds);
                         Console.WriteLine($"[Sensor][{sensorConfig.Id}] Starting with {sensorConfig.ReadingIntervalSeconds}s interval");
 
+                        bool firstReading = true;
+                        
                         while (!cancellationToken.IsCancellationRequested)
                         {
                             try
                             {
+                                // Send reading immediately on first loop, then wait on subsequent loops
+                                if (!firstReading)
+                                {
+                                    await Task.Delay(interval, cancellationToken);
+                                }
+                                firstReading = false;
+                                
                                 var (temperatureC, humidityPercent) = sensorReader.ReadMeasurement();
 
                                 Console.WriteLine(
@@ -232,8 +241,6 @@ namespace TrailerAutomationClientNet
                             {
                                 Console.WriteLine($"[{DateTime.Now:T}][{sensorConfig.Id}] Sensor loop error: {ex.Message}");
                             }
-
-                            await Task.Delay(interval, cancellationToken);
                         }
                     }, cancellationToken)
                 ).ToList();

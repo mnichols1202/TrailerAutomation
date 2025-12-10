@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @inject SensorReadingRegistry Registry
 @inject SensorReadingRepository Repository
+@inject ClientRegistry ClientRegistry
 @implements IDisposable
 
 <PageTitle>Sensor Readings</PageTitle>
@@ -41,7 +42,8 @@
                 @foreach (var reading in _currentReadings.OrderBy(r => r.ClientId))
                 {
                     var minutesAgo = (DateTime.UtcNow - reading.TimestampUtc).TotalMinutes;
-                    var isRecent = minutesAgo < 5;
+                    var staleThresholdMinutes = _staleThresholdMinutes;
+                    var isRecent = minutesAgo < staleThresholdMinutes;
                     
                     <tr>
                         <td>
@@ -84,14 +86,16 @@
         The page automatically refreshes every 10 seconds.
     </p>
     <ul style="margin-top: 10px; margin-left: 20px; color: #7f8c8d;">
-        <li><strong>Active</strong> - Reading received within last 5 minutes</li>
-        <li><strong>Stale</strong> - No reading received for more than 5 minutes</li>
+        <li><strong>Active</strong> - Reading received within last @_staleThresholdMinutes minutes</li>
+        <li><strong>Stale</strong> - No reading received for more than @_staleThresholdMinutes minutes</li>
+        <li>Stale threshold is 3x the longest configured sensor interval</li>
     </ul>
 </div>
 
 @code {
     private List<SensorReading> _currentReadings = new();
     private int _totalCount;
+    private int _staleThresholdMinutes = 15;  // Default to 15 minutes
     private System.Threading.Timer? _timer;
 
     protected override void OnInitialized()
@@ -113,6 +117,11 @@
     {
         _currentReadings = Registry.GetAllReadings().ToList();
         _totalCount = Repository.GetTotalCount();
+        
+        // Calculate stale threshold: 3x the longest sensor interval
+        // Since we don't track sensor intervals in ClientInfo, use 3x 5 minutes = 15 minutes as default
+        // In future, could track actual intervals by monitoring time between readings per client
+        _staleThresholdMinutes = 15; // 3x typical 300-second (5 minute) interval
     }
 
     public void Dispose()

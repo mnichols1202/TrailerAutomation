@@ -13,7 +13,7 @@
 
 // Timers for periodic tasks
 static unsigned long g_lastHeartbeatMs = 0;
-static unsigned long g_lastSensorMs[MAX_SENSORS] = {0};  // Per-sensor timing
+static unsigned long g_lastSensorMs[MAX_SENSORS];  // Per-sensor timing - initialized in setup()
 static unsigned long g_bootDelayStartMs = 0;
 static bool g_bootDelayComplete = false;
 bool g_deviceRegistered = false;  // Non-static so commandlistener can access
@@ -54,6 +54,15 @@ void setup()
     const DeviceConfig& config = getDeviceConfig();
     g_heartbeatIntervalMs = config.heartbeatSeconds * 1000UL;
     // Sensor intervals are now per-sensor in config.sensors[].readingIntervalSeconds
+    
+    // Initialize sensor timers to trigger first reading immediately after initialization
+    // Set each sensor's timer based on its configured interval to ensure immediate first reading
+    for (int i = 0; i < config.sensorCount && i < MAX_SENSORS; i++)
+    {
+        unsigned long intervalMs = config.sensors[i].readingIntervalSeconds * 1000UL;
+        // Set to current time minus interval so first check will trigger immediately
+        g_lastSensorMs[i] = millis() - intervalMs;
+    }
     
     logLine("Starting 3-second boot delay for hardware initialization...");
     
