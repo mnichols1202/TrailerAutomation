@@ -16,4 +16,10 @@ bool initButtons();
  */
 void checkButtons();
 
+/**
+ * Sync button state tracking when relay state changes externally
+ * Call this from command listener after setRelay commands
+ */
+void syncButtonRelayState(const char* relayId, bool state);
+
 #endif // BUTTON_H

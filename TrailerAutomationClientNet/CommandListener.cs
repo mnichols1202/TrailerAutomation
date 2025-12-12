@@ -411,6 +411,7 @@ namespace TrailerAutomationClientNet
                 // Build configuration response
                 var configData = new
                 {
+                    buildVersion = BuildVersion.Version,
                     device = new
                     {
                         clientId = _config.Device.ClientId,

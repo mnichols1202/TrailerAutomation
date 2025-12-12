@@ -65,7 +65,15 @@ bool initButtons()
         g_buttonStates[i].lastDebounceTime = 0;
         strncpy(g_buttonStates[i].targetDevice, btn.targetDevice, MAX_DEVICE_ID_LEN - 1);
         strncpy(g_buttonStates[i].targetRelay, btn.targetRelay, MAX_RELAY_ID_LEN - 1);
-        g_buttonStates[i].relayState = false; // Assume relay starts off
+        
+        // Read actual relay state instead of assuming false
+        bool actualState = false;
+        if (strcmp(btn.targetDevice, config.clientId) == 0)
+        {
+            // Local relay - read actual GPIO state
+            getRelayState(btn.targetRelay, &actualState);
+        }
+        g_buttonStates[i].relayState = actualState;
         
         logLine("Button '" + String(btn.name) + "' initialized on pin " + String(btn.pin) + 
                 " -> " + String(btn.targetDevice) + ":" + String(btn.targetRelay));
@@ -85,11 +93,11 @@ static void handleLocalToggle(ButtonState* btnState)
     {
         logLine("[Button] Set local relay '" + String(btnState->targetRelay) + "' to " + (btnState->relayState ? "ON" : "OFF"));
         
-        // Notify gateway of state change so web UI updates
+        // Notify gateway of state change so web UI updates (best-effort, non-blocking)
         const char* stateStr = btnState->relayState ? "on" : "off";
         const DeviceConfig& config = getDeviceConfig();
         
-        if (isGatewayKnown())
+        if (isGatewayKnown() && WiFi.status() == WL_CONNECTED)
         {
             String url = "http://" + getGatewayHost() + ":" + String(getGatewayPort()) + 
                          "/api/devices/" + String(config.clientId) + 
@@ -97,9 +105,9 @@ static void handleLocalToggle(ButtonState* btnState)
             
             HTTPClient http;
             http.begin(url);
-            http.setTimeout(5000);
+            http.setTimeout(1000);  // Fast timeout for responsive button feel
             
-            logLine("[Button] Notifying gateway of relay state change");
+            logLine("[Button] Notifying gateway (best-effort)");
             
             int httpCode = http.POST("");
             
@@ -109,10 +117,14 @@ static void handleLocalToggle(ButtonState* btnState)
             }
             else
             {
-                logLine("[Button] WARNING: Gateway notification failed, HTTP code " + String(httpCode));
+                logLine("[Button] Gateway notification failed (offline?) - relay still activated");
             }
             
             http.end();
+        }
+        else
+        {
+            logLine("[Button] Gateway offline - relay activated locally only");
         }
     }
     else
@@ -211,6 +223,26 @@ void checkButtons()
             
             // Update stable value after debounce period
             state.lastStableValue = currentReading;
+        }
+    }
+}
+
+void syncButtonRelayState(const char* relayId, bool state)
+{
+    if (!g_buttonsInitialized)
+    {
+        return;
+    }
+    
+    // Update button state tracking for any buttons targeting this relay
+    for (int i = 0; i < g_buttonCount; i++)
+    {
+        ButtonState& btnState = g_buttonStates[i];
+        
+        if (strcmp(btnState.targetRelay, relayId) == 0)
+        {
+            btnState.relayState = state;
+            logLine("[Button] Synced button state for relay '" + String(relayId) + "' to " + (state ? "ON" : "OFF"));
         }
     }
 }

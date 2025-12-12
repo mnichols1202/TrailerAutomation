@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="deploy-gateway.sh" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Iot.Device.Bindings" Version="4.0.1" />
     <PackageReference Include="Makaretu.Dns.Multicast" Version="0.27.0" />
     <PackageReference Include="System.Device.Gpio" Version="4.0.1" />
@@ -17,9 +21,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Page Include="deploy-gateway.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Page>
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+
+  <!-- Generate build version before compilation -->
+  <!-- This version is shared with Pico and S3 projects via ClientVersion.txt -->
+  <Target Name="GenerateBuildVersion" BeforeTargets="CoreCompile">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)generate_version.ps1&quot;" />
+  </Target>
 
 </Project>

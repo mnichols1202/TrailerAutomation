@@ -41,3 +41,6 @@ desktop.ini
 
 # Keep example config
 !config.example.py
+
+# Generated build version file
+include/BuildVersion.h

@@ -17,4 +17,15 @@
 		<PackageReference Include="LiteDB" Version="5.0.21" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <None Update="deploy-gateway.sh">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
+	<!-- Generate build version before compilation -->
+	<Target Name="GenerateBuildVersion" BeforeTargets="CoreCompile">
+		<Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)generate_version.ps1&quot;" />
+	</Target>
+
 </Project>

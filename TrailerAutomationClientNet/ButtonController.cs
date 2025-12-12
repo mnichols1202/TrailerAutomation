@@ -67,13 +67,22 @@ namespace TrailerAutomationClientNet
                     // Configure pin as input with pull-up (active LOW)
                     _gpioController.OpenPin(button.Pin, PinMode.InputPullUp);
                     
+                    // Read actual relay state instead of assuming false
+                    var actualState = false;
+                    if (string.IsNullOrEmpty(button.TargetDevice) || button.TargetDevice == _config.Device.ClientId)
+                    {
+                        // Local relay - read actual state
+                        var stateStr = _relayController?.GetRelayState(button.TargetRelay);
+                        actualState = stateStr == "on";
+                    }
+                    
                     var state = new ButtonState
                     {
                         Config = button,
                         LastValue = PinValue.High, // Pull-up = High when not pressed
                         LastStableValue = PinValue.High,
                         LastDebounceTime = DateTime.UtcNow,
-                        RelayState = false // Assume relay starts off
+                        RelayState = actualState // Use actual relay state
                     };
                     
                     _buttonStates[button.Pin] = state;
@@ -239,12 +248,14 @@ namespace TrailerAutomationClientNet
         {
             try
             {
-                // Send state change notification to gateway so web UI updates
+                // Send state change notification to gateway so web UI updates (best-effort, non-blocking)
                 var url = $"/api/devices/{_config.Device.ClientId}/relays/{relayId}/state?state={state}";
                 
-                Console.WriteLine($"[Button] Notifying gateway of relay state change");
+                Console.WriteLine($"[Button] Notifying gateway (best-effort)");
                 
-                var response = await _httpClient.PostAsync(url, null);
+                // Use short timeout for responsive button feel
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                var response = await _httpClient.PostAsync(url, null, cts.Token);
                 
                 if (response.IsSuccessStatusCode)
                 {
@@ -252,12 +263,16 @@ namespace TrailerAutomationClientNet
                 }
                 else
                 {
-                    Console.WriteLine($"[Button] WARNING: Gateway notification failed with status {response.StatusCode}");
+                    Console.WriteLine($"[Button] Gateway notification failed (offline?) - relay still activated");
                 }
+            }
+            catch (TaskCanceledException)
+            {
+                Console.WriteLine($"[Button] Gateway notification timeout - relay still activated");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Button] WARNING: Failed to notify gateway: {ex.Message}");
+                Console.WriteLine($"[Button] Gateway offline - relay activated locally only: {ex.Message}");
                 // Don't throw - local relay operation succeeded, gateway notification is best-effort
             }
         }

@@ -211,6 +211,9 @@ void processCommandListener()
                 
                 if (setRelayState(relayId, state))
                 {
+                    // Sync button state tracking
+                    syncButtonRelayState(relayId, state);
+                    
                     respDoc["success"] = true;
                     respDoc["message"] = String("Relay '") + relayId + "' set to " + stateStr;
                     
@@ -281,6 +284,9 @@ void processCommandListener()
         respDoc["message"] = "Configuration retrieved";
         
         JsonObject data = respDoc["data"].to<JsonObject>();
+        
+        // Build version
+        data["buildVersion"] = BUILD_VERSION;
         
         // Device section
         JsonObject device = data["device"].to<JsonObject>();

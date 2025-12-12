@@ -568,6 +568,13 @@
             sb.AppendLine("=== Configuration ===");
             sb.AppendLine();
             
+            // Build version
+            if (config.TryGetProperty("buildVersion", out var buildVersion))
+            {
+                sb.AppendLine($"Build Version: {buildVersion.GetString()}");
+                sb.AppendLine();
+            }
+            
             // Device section
             if (config.TryGetProperty("device", out var device))
             {
