@@ -120,6 +120,13 @@
                                 🔄 Reboot
                             </button>
                             <button class="refresh-btn" 
+                                    style="background: #dc3545; color: white; padding: 5px 10px; margin-left: 5px;" 
+                                    @onclick="() => EnterBootselMode(device.DeviceId)"
+                                    disabled="@(!isOnline)"
+                                    title="Enter BOOTSEL/Download Mode for Firmware Upload">
+                                ⚡ BOOTSEL
+                            </button>
+                            <button class="refresh-btn" 
                                     style="background: #17a2b8; color: white; padding: 5px 10px; margin-left: 5px;" 
                                     @onclick="() => ShowDeviceConfig(device.DeviceId)"
                                     disabled="@(!isOnline)"
@@ -507,6 +514,59 @@
                 Success = false,
                 Message = $"Error: {ex.Message}",
                 ErrorCode = "REBOOT_ERROR"
+            };
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task EnterBootselMode(string deviceId)
+    {
+        try
+        {
+            Console.WriteLine($"[BOOTSEL] Sending bootsel command to {deviceId}...");
+            
+            var bootselCommand = new DeviceCommand
+            {
+                CommandId = Guid.NewGuid().ToString(),
+                Type = "bootsel",
+                Payload = System.Text.Json.JsonSerializer.SerializeToElement(new { })
+            };
+            
+            var result = await CommandService.SendCommandAsync(deviceId, bootselCommand);
+            
+            if (result != null && result.Success)
+            {
+                Console.WriteLine($"[BOOTSEL] ✅ {deviceId} is entering bootloader mode");
+                
+                _commandResults[deviceId] = new CommandResult
+                {
+                    Success = true,
+                    Message = "Device entering BOOTSEL mode. You can now upload firmware via PlatformIO.",
+                    ErrorCode = null
+                };
+            }
+            else
+            {
+                Console.WriteLine($"[BOOTSEL] ❌ {deviceId} bootsel command failed");
+                
+                _commandResults[deviceId] = new CommandResult
+                {
+                    Success = false,
+                    Message = result?.Message ?? "BOOTSEL command failed",
+                    ErrorCode = result?.ErrorCode ?? "BOOTSEL_ERROR"
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[BOOTSEL] ❌ {deviceId} failed: {ex.Message}");
+            
+            _commandResults[deviceId] = new CommandResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}",
+                ErrorCode = "BOOTSEL_ERROR"
             };
         }
         

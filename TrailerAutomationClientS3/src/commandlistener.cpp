@@ -2,6 +2,8 @@
 #include "sdconfig.h"
 #include "relaycontrol.h"
 #include "logging.h"
+#include "button.h"
+#include "BuildVersion.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <FS.h>
@@ -162,6 +164,29 @@ void processCommandListener()
         respDoc["message"] = "Device will re-initialize";
         
         logLine("[CommandListener] Init command received, will re-register with gateway");
+    }
+    else if (strcmp(commandType, "bootsel") == 0)
+    {
+        // Send success response first, then enter bootsel/download mode
+        respDoc["success"] = true;
+        respDoc["message"] = "Device entering download mode";
+        
+        logLine("[CommandListener] BOOTSEL command received, entering download mode in 1 second");
+        
+        // Send response
+        String response;
+        serializeJson(respDoc, response);
+        client.println(response);
+        client.flush();
+        client.stop();
+        
+        // Wait a moment for response to be sent, then enter download mode
+        delay(1000);
+        // For ESP32-S3, we can trigger download mode via USB OTG
+        // This requires USB Serial/JTAG or USB OTG to be active
+        USB.enableDFU();
+        ESP.restart();
+        return;  // Never reached
     }
     else if (strcmp(commandType, "reboot") == 0)
     {

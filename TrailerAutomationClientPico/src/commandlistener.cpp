@@ -2,6 +2,8 @@
 #include "fsconfig.h"
 #include "relaycontrol.h"
 #include "logging.h"
+#include "button.h"
+#include "BuildVersion.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -161,6 +163,26 @@ void processCommandListener()
         respDoc["message"] = "Device will re-initialize";
         
         logLine("[CommandListener] Init command received, will re-register with gateway");
+    }
+    else if (strcmp(commandType, "bootsel") == 0)
+    {
+        // Send success response first, then enter bootsel mode
+        respDoc["success"] = true;
+        respDoc["message"] = "Device entering BOOTSEL mode";
+        
+        logLine("[CommandListener] BOOTSEL command received, entering bootloader in 1 second");
+        
+        // Send response
+        String response;
+        serializeJson(respDoc, response);
+        client.println(response);
+        client.flush();
+        client.stop();
+        
+        // Wait a moment for response to be sent, then enter bootsel mode
+        delay(1000);
+        rp2040.rebootToBootloader();
+        return;  // Never reached
     }
     else if (strcmp(commandType, "reboot") == 0)
     {

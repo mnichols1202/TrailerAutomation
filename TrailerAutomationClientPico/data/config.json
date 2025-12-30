@@ -1,35 +1,26 @@
 {
   "WiFi": {
-    "SSID": "MM0001",
-    "Password": "J0shua07"
+    "SSID": "Paradise_Loop",
+    "Password": "S3cur1ty3742"
   },
   "Device": {
-    "ClientId": "Pico2W-001",
-    "DeviceType": "Pico2W",
-    "FriendlyName": "AltController",
+    "ClientId": "Pico-2W-01",
+    "DeviceType": "PICO2W",
+    "FriendlyName": "Pico 2W Node 1",
     "CommandListenerPort": 8888
   },
   "Intervals": {
     "HeartbeatSeconds": 60
   },
   "Hardware": {
-    "Relays": [
+    "Sensors": [
       {
-        "Id": "1",
-        "Name": "Water Heater",
-        "Pin": 6,
-        "InitialState": false,
-        "Enabled": true
-      }
-    ],
-    "Buttons": [
-      {
-        "Id": "button1",
-        "Name": "Water Heater Button",
-        "Pin": 0,
-        "TargetDevice": "PicoW1",
-        "TargetRelay": "1",
-        "Enabled": true
+        "Id": "sht31-main",
+        "Type": "SHT31",
+        "Name": "Temperature \u0026 Humidity",
+        "I2cAddress": "0x44",
+        "Enabled": true,
+        "ReadingIntervalSeconds": 30
       }
     ]
   }

@@ -34,8 +34,9 @@
 
   <!-- Generate build version before compilation -->
   <!-- This version is shared with Pico and S3 projects via ClientVersion.txt -->
-  <Target Name="GenerateBuildVersion" BeforeTargets="CoreCompile">
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)generate_version.ps1&quot;" />
+  <!-- Only generate if BuildVersion.cs doesn't exist or is older than 1 minute to preserve version across build/publish -->
+  <Target Name="GenerateBuildVersion" BeforeTargets="BeforeBuild">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)generate_version.ps1&quot;" Condition="!Exists('$(ProjectDir)BuildVersion.cs') Or $([System.DateTime]::Now.Subtract($([System.IO.File]::GetLastWriteTime('$(ProjectDir)BuildVersion.cs'))).TotalMinutes) &gt; 1" />
   </Target>
 
 </Project>
