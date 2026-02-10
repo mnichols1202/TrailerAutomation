@@ -64,7 +64,7 @@ void setup()
         g_lastSensorMs[i] = millis() - intervalMs;
     }
     
-    logLine("Starting 15-second boot delay for hardware initialization (battery-safe)...");
+    logLine("Starting 3-second boot delay for hardware initialization...");
     
     // Start non-blocking boot delay timer
     g_bootDelayStartMs = millis();
@@ -150,14 +150,8 @@ void loop()
     }
     
     // 1. Ensure Wi-Fi
-    // Check for "zombie" WiFi - connected but no actual traffic
-    static unsigned long lastSuccessfulComm = millis();
-    static int consecutiveFailures = 0;
-    
     if (!ensureWifiConnected())
     {
-        consecutiveFailures++;
-        
         if (isGatewayKnown())
         {
             logLine("Lost Wi-Fi; forgetting previously known gateway.");
@@ -252,11 +246,11 @@ void loop()
         }
     }
 
-    // 4. Process incoming commands (non-blocking)
-    processCommandListener();
-    
-    // 5. Check buttons for state changes
+    // 4. Check buttons (non-blocking)
     checkButtons();
+
+    // 5. Process incoming commands (non-blocking)
+    processCommandListener();
 
     // 6. Heartbeat timing
     if (now - g_lastHeartbeatMs >= g_heartbeatIntervalMs)
@@ -269,15 +263,12 @@ void loop()
         {
             // Heartbeat succeeded - reset failure counter
             g_consecutiveHeartbeatFailures = 0;
-            consecutiveFailures = 0;
-            lastSuccessfulComm = now;
             clearLedError();
         }
         else
         {
             // Heartbeat failed
             g_consecutiveHeartbeatFailures++;
-            consecutiveFailures++;
             logLine("Heartbeat failed (" + String(g_consecutiveHeartbeatFailures) + "/" + 
                     String(MAX_FAILURES_BEFORE_REDISCOVERY) + ")");
             
@@ -343,9 +334,6 @@ void loop()
             }
         }
     }
-
-    // 7. Check button states
-    checkButtons();
 
     // 8. Small delay to avoid busy spin
     delay(10);

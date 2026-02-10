@@ -1,4 +1,8 @@
 {
+    "WiFi": {
+    "SSID": "Paradise_Loop",
+    "Password": "S3cur1ty3742"
+  },
   "Device": {
     "DeviceId": "your-device-name",
     "ClientId": "your-device-name",
@@ -35,6 +39,16 @@
         "Type": "SHT31",
         "Name": "Temperature & Humidity",
         "I2cAddress": "0x44",
+        "Enabled": true
+      }
+    ],
+      "Buttons": [
+      {
+        "Id": "button1",
+        "Name": "Water Heater Button",
+        "Pin": 0,
+        "TargetDevice": "PicoW-001",
+        "TargetRelay": "1",
         "Enabled": true
       }
     ]

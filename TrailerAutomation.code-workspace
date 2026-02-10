@@ -1,4 +1,4 @@
-﻿{
+{
   "folders": [
     {
       "name": "TrailerAutomation (Root)",
@@ -21,6 +21,7 @@
       "**/obj": true,
       "**/.pio": true,
       "**/__pycache__": true
-    }
+    },
+    "powershell.cwd": "ClientPico (PlatformIO)"
   }
 }

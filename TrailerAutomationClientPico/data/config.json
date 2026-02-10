@@ -4,24 +4,34 @@
     "Password": "S3cur1ty3742"
   },
   "Device": {
-    "ClientId": "Pico-2W-01",
-    "DeviceType": "PICO2W",
-    "FriendlyName": "Pico 2W Node 1",
+    "ClientId": "TestPico",
+    "DeviceType": "PICOW",
+    "FriendlyName": "Test Pico",
     "CommandListenerPort": 8888
   },
   "Intervals": {
     "HeartbeatSeconds": 60
   },
   "Hardware": {
-    "Sensors": [
+        "Relays": [
       {
-        "Id": "sht31-main",
-        "Type": "SHT31",
-        "Name": "Temperature \u0026 Humidity",
-        "I2cAddress": "0x44",
-        "Enabled": true,
-        "ReadingIntervalSeconds": 30
+        "Id": "1",
+        "Name": "Test Relay",
+        "Pin": 6,
+        "InitialState": false,
+        "Enabled": true
+      }
+    ],
+        "Buttons": [
+      {
+        "Id": "button1",
+        "Name": "Test Button",
+        "Pin": 0,
+        "TargetDevice": "TestPico",
+        "TargetRelay": "1",
+        "Enabled": true
       }
     ]
   }
 }
+

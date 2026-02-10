@@ -167,24 +167,19 @@ void processCommandListener()
     }
     else if (strcmp(commandType, "bootsel") == 0)
     {
-        // Send success response first, then enter bootsel/download mode
+        // BOOTSEL not supported on ESP32-S3; respond and reboot instead
         respDoc["success"] = true;
-        respDoc["message"] = "Device entering download mode";
+        respDoc["message"] = "BOOTSEL not supported on ESP32-S3; rebooting";
         
-        logLine("[CommandListener] BOOTSEL command received, entering download mode in 1 second");
+        logLine("[CommandListener] BOOTSEL command received; rebooting (DFU not supported)");
         
-        // Send response
         String response;
         serializeJson(respDoc, response);
         client.println(response);
         client.flush();
         client.stop();
         
-        // Wait a moment for response to be sent, then enter download mode
-        delay(1000);
-        // For ESP32-S3, we can trigger download mode via USB OTG
-        // This requires USB Serial/JTAG or USB OTG to be active
-        USB.enableDFU();
+        delay(500);
         ESP.restart();
         return;  // Never reached
     }

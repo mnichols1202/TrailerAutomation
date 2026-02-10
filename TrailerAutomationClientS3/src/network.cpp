@@ -5,6 +5,7 @@
 #include "config.h"
 #include "logging.h"
 #include "sdconfig.h"
+#include "relaycontrol.h"
 
 // Internal gateway state
 static String   g_gatewayHost;

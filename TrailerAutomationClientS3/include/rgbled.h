@@ -3,6 +3,9 @@
 // RGB LED status indication using NeoPixel on GPIO 48
 #define RGB_PIN       48
 #define RGB_COUNT     1
+#ifdef RGB_BRIGHTNESS
+#undef RGB_BRIGHTNESS
+#endif
 #define RGB_BRIGHTNESS 30  // Safe brightness for onboard LED
 
 // LED States
