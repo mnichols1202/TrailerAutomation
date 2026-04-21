@@ -1,6 +1,7 @@
 {
     "version": "2.0.0",
     "tasks": [
+        // ── .NET ──────────────────────────────────────────────────────────────
         {
             "label": "build-gateway",
             "command": "dotnet",
@@ -46,14 +47,95 @@
             "args": [
                 "publish",
                 "${workspaceFolder}/TrailerAutomationClientNet/TrailerAutomationClientNet.csproj",
-                "-c",
-                "Release",
-                "-r",
-                "linux-arm64",
+                "-c", "Release",
+                "-r", "linux-arm64",
                 "--no-self-contained",
                 "-p:PublishSingleFile=true"
             ],
             "problemMatcher": "$msCompile"
+        },
+
+        // ── ESP32-S3 (two-pass: flash firmware first, then filesystem) ────────
+        {
+            "label": "S3: Build firmware",
+            "type": "shell",
+            "command": "pio run -e trailer_automation_client_s3",
+            "options": { "cwd": "${workspaceFolder}/TrailerAutomationClientS3" },
+            "problemMatcher": ["$platformio"],
+            "group": "build"
+        },
+        {
+            "label": "S3: Flash firmware",
+            "type": "shell",
+            "command": "pio run -e trailer_automation_client_s3 --target upload",
+            "options": { "cwd": "${workspaceFolder}/TrailerAutomationClientS3" },
+            "problemMatcher": ["$platformio"]
+        },
+        {
+            "label": "S3: Flash filesystem (uploadfs) — run AFTER firmware flash",
+            "type": "shell",
+            "command": "pio run -e trailer_automation_client_s3 --target uploadfs",
+            "options": { "cwd": "${workspaceFolder}/TrailerAutomationClientS3" },
+            "problemMatcher": ["$platformio"]
+        },
+        {
+            "label": "S3: Monitor serial",
+            "type": "shell",
+            "command": "pio device monitor -e trailer_automation_client_s3",
+            "options": { "cwd": "${workspaceFolder}/TrailerAutomationClientS3" },
+            "problemMatcher": []
+        },
+
+        // ── Pico W (ONE-PASS ONLY — unified image = firmware + LittleFS) ──────
+        // WARNING: Never flash firmware-only to Pico — it will wipe config.json.
+        // Always use the unified build target that combines both into one .uf2.
+        {
+            "label": "PicoW: Build unified image (firmware + LittleFS)",
+            "type": "shell",
+            "command": "pio run -e picow --target buildunified",
+            "options": { "cwd": "${workspaceFolder}/TrailerAutomationClientPico" },
+            "problemMatcher": ["$platformio"],
+            "group": "build"
+        },
+        {
+            "label": "PicoW: Flash unified image",
+            "type": "shell",
+            "command": "pio run -e picow --target upload",
+            "options": { "cwd": "${workspaceFolder}/TrailerAutomationClientPico" },
+            "problemMatcher": ["$platformio"]
+        },
+        {
+            "label": "PicoW: Monitor serial",
+            "type": "shell",
+            "command": "pio device monitor -e picow",
+            "options": { "cwd": "${workspaceFolder}/TrailerAutomationClientPico" },
+            "problemMatcher": []
+        },
+
+        // ── Pico 2W (ONE-PASS ONLY — unified image = firmware + LittleFS) ─────
+        // WARNING: Never flash firmware-only to Pico 2W — it will wipe config.json.
+        // Always use the unified build target that combines both into one .uf2.
+        {
+            "label": "Pico2W: Build unified image (firmware + LittleFS)",
+            "type": "shell",
+            "command": "pio run -e pico2w --target buildunified",
+            "options": { "cwd": "${workspaceFolder}/TrailerAutomationClientPico" },
+            "problemMatcher": ["$platformio"],
+            "group": "build"
+        },
+        {
+            "label": "Pico2W: Flash unified image",
+            "type": "shell",
+            "command": "pio run -e pico2w --target upload",
+            "options": { "cwd": "${workspaceFolder}/TrailerAutomationClientPico" },
+            "problemMatcher": ["$platformio"]
+        },
+        {
+            "label": "Pico2W: Monitor serial",
+            "type": "shell",
+            "command": "pio device monitor -e pico2w",
+            "options": { "cwd": "${workspaceFolder}/TrailerAutomationClientPico" },
+            "problemMatcher": []
         }
     ]
 }

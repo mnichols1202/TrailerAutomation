@@ -194,7 +194,6 @@ void loop()
         {
             logLine("Gateway discovery attempt failed; will retry.");
             setLedError(ERROR_MDNS);  // 1 red blink - mDNS/Gateway discovery failed
-            delay(2000);
             return;
         }
 

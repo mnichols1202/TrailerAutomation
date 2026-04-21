@@ -2,20 +2,22 @@
 
 <div class="page">
     <header>
-        <div class="container" style="position: relative;">
-            <div style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #999;">
-                Build: @BuildVersion.Version
+        <div class="header-inner">
+            <div class="header-brand">
+                <h1>TrailerAutomation</h1>
             </div>
-            <h1>🚐 TrailerAutomation Gateway</h1>
             <nav>
-                <a href="/sensors">Sensor Readings</a>
-                <a href="/devices">Device Control</a>
-                <a href="/history">History</a>
-                <a href="/swagger">API Docs</a>
+                <NavLink href="/sensors" Match="NavLinkMatch.Prefix">Sensors</NavLink>
+                <NavLink href="/devices" Match="NavLinkMatch.Prefix">Devices</NavLink>
+                <NavLink href="/history" Match="NavLinkMatch.Prefix">History</NavLink>
+                <a href="/swagger" target="_blank">API</a>
             </nav>
+            <div class="header-right">
+                <span class="header-build">v@BuildVersion.Version</span>
+            </div>
         </div>
     </header>
-    
+
     <main class="container">
         @Body
     </main>

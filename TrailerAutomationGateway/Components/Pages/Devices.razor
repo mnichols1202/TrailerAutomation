@@ -2,169 +2,192 @@
 @rendermode InteractiveServer
 @inject ClientRegistry ClientRegistry
 @inject DeviceCommandService CommandService
+@inject SensorReadingRegistry SensorRegistry
 @implements IDisposable
 
-<PageTitle>Device Control</PageTitle>
+<PageTitle>Devices</PageTitle>
 
-<div class="card">
-    <h2>🎛️ Device Control</h2>
-    
-    <div style="margin-bottom: 20px;">
-        <button class="refresh-btn" @onclick="LoadDevices">🔄 Refresh</button>
-        <button class="refresh-btn btn-danger" style="margin-left: 10px;" @onclick="ReInitDevices" disabled="@_isReInitializing">
+<div class="page-header">
+    <h2 style="margin: 0; padding: 0;">Devices</h2>
+    <div class="page-header-actions">
+        <span class="toolbar-meta">Updated <strong>@DateTime.Now.ToString("HH:mm:ss")</strong></span>
+        <button class="btn btn-secondary" @onclick="LoadDevices">↺ Refresh</button>
+        <button class="btn btn-danger" @onclick="ReInitDevices" disabled="@_isReInitializing">
             @if (_isReInitializing)
             {
-                <span>⏳ Re-Initializing...</span>
+                <span>Re-Initializing…</span>
             }
             else
             {
-                <span>🔄 Re-Init All Devices</span>
+                <span>Re-Init All</span>
             }
         </button>
-        <span style="margin-left: 20px; color: #7f8c8d;">
-            Last updated: <strong>@DateTime.Now.ToString("HH:mm:ss")</strong>
-        </span>
-        @if (!string.IsNullOrEmpty(_reInitMessage))
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(_reInitMessage))
+{
+    <div class="alert @(_reInitSuccess ? "alert-success" : "alert-danger")">
+        @_reInitMessage
+    </div>
+}
+
+@if (!_devices.Any())
+{
+    <div class="empty-state">
+        <span class="empty-state-icon" style="font-size:48px; opacity:0.3;">[ ]</span>
+        <p>No devices registered yet. Waiting for devices to connect…</p>
+    </div>
+}
+else
+{
+    <div class="device-grid">
+        @foreach (var device in _devices.OrderBy(d => d.DeviceId))
         {
-            <br/>
-            <span style="margin-top: 10px; display: inline-block; color: @(_reInitSuccess ? "#28a745" : "#dc3545");">
-                @_reInitMessage
-            </span>
+            var minutesAgo = (DateTime.UtcNow - device.LastSeen).TotalMinutes;
+            var isOnline = minutesAgo < 5;
+            var hasSensor = _sensorReadings.TryGetValue(device.DeviceId, out var sensorReading);
+            var sensorAgeMin = hasSensor ? (DateTime.UtcNow - sensorReading!.TimestampUtc).TotalMinutes : 0;
+
+            <div class="device-card @(isOnline ? "online" : "offline")">
+
+                <div class="dc-header">
+                    <div class="dc-title">
+                        <span class="dc-name">@device.DeviceId</span>
+                        @if (!string.IsNullOrEmpty(device.FriendlyName))
+                        {
+                            <span class="dc-friendly">@device.FriendlyName</span>
+                        }
+                    </div>
+                    <div class="dc-badges">
+                        @if (!string.IsNullOrEmpty(device.DeviceType) && device.DeviceType != "Unknown")
+                        {
+                            <span class="device-type-badge">@device.DeviceType</span>
+                        }
+                        <span class="status-dot @(isOnline ? "online" : "offline")">
+                            @(isOnline ? "Online" : "Offline")
+                        </span>
+                    </div>
+                </div>
+
+                <div class="dc-meta">
+                    <span class="dc-meta-item">
+                        <span class="dc-meta-label">IP</span>@device.IpAddress
+                    </span>
+                    <span class="dc-meta-item">
+                        <span class="dc-meta-label">Port</span>@device.CommandPort
+                    </span>
+                    <span class="dc-meta-spacer"></span>
+                    <span class="dc-last-seen">@minutesAgo.ToString("F0")m ago</span>
+                </div>
+
+                @if (device.Capabilities.Length > 0)
+                {
+                    <div class="capability-tags">
+                        @foreach (var cap in device.Capabilities)
+                        {
+                            <span class="capability-tag">@cap</span>
+                        }
+                    </div>
+                }
+
+                @if (device.Capabilities.Contains("relay") && device.Relays != null && device.Relays.Length > 0)
+                {
+                    <div class="dc-relays">
+                        <div class="dc-section-label">GPIO / Relays</div>
+                        @foreach (var relay in device.Relays)
+                        {
+                            var relayIdCopy    = relay.Id;
+                            var relayNameCopy  = relay.Name;
+                            var deviceIdCopy   = device.DeviceId;
+                            var stateStr       = device.RelayStates.GetValueOrDefault(relayIdCopy, "off");
+                            var isOn           = stateStr == "on";
+
+                            <div class="relay-row">
+                                <div class="relay-info">
+                                    <span class="relay-led @(isOn ? "on" : "off")"></span>
+                                    <span class="relay-name">@relayNameCopy</span>
+                                    <span class="relay-state-label @(isOn ? "on" : "off")">@(isOn ? "ON" : "OFF")</span>
+                                </div>
+                                <button class="relay-toggle-btn @(isOn ? "on" : "off")"
+                                        @onclick="@(async () => await ToggleRelay(deviceIdCopy, relayIdCopy, relayNameCopy))"
+                                        disabled="@(!isOnline)"
+                                        title="Toggle @relayNameCopy">
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+                else if (device.Capabilities.Contains("relay"))
+                {
+                    <div class="dc-relays">
+                        <div class="dc-section-label">GPIO / Relays</div>
+                        <span style="font-size: 12px; color: var(--text-tertiary);">No relay info received yet</span>
+                    </div>
+                }
+
+                @if (hasSensor)
+                {
+                    <div class="dc-sensor">
+                        <div class="dc-sensor-reading">
+                            <span class="dc-sensor-value temp">@sensorReading!.TemperatureC.ToString("F1")</span>
+                            <span class="dc-sensor-unit">°C</span>
+                        </div>
+                        <span class="dc-sensor-sub">/ @((sensorReading.TemperatureC * 9.0 / 5.0 + 32).ToString("F1"))°F</span>
+                        <div class="dc-sensor-reading" style="margin-left: 8px;">
+                            <span class="dc-sensor-value humidity">@sensorReading.HumidityPercent.ToString("F1")</span>
+                            <span class="dc-sensor-unit">%</span>
+                        </div>
+                        <span class="dc-sensor-age">@sensorAgeMin.ToString("F0")m ago</span>
+                    </div>
+                }
+
+                @if (_commandResults.TryGetValue(device.DeviceId, out var result))
+                {
+                    <div class="cmd-result @(result.Success ? "success" : "error")">
+                        <span class="cmd-result-msg">
+                            @(result.Success ? "✓" : "✗") @result.Message
+                            @if (!string.IsNullOrEmpty(result.ErrorCode))
+                            {
+                                <span style="opacity: 0.65; font-size: 11px;"> (@result.ErrorCode)</span>
+                            }
+                        </span>
+                        <button class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px;"
+                                @onclick="() => ClearResult(device.DeviceId)">✕</button>
+                    </div>
+                }
+
+                <div class="dc-actions">
+                    <button class="btn btn-warning"
+                            @onclick="() => RebootDevice(device.DeviceId)"
+                            disabled="@(!isOnline)"
+                            title="Reboot device">
+                        ↺ Reboot
+                    </button>
+                    <button class="btn btn-danger"
+                            @onclick="() => EnterBootselMode(device.DeviceId)"
+                            disabled="@(!isOnline)"
+                            title="Enter BOOTSEL / download mode for firmware upload">
+                        BOOTSEL
+                    </button>
+                    <button class="btn btn-info"
+                            @onclick="() => ShowDeviceConfig(device.DeviceId)"
+                            disabled="@(!isOnline)"
+                            title="View device configuration">
+                        ℹ Info
+                    </button>
+                    <button class="btn btn-purple"
+                            @onclick="() => EditDeviceConfig(device.DeviceId)"
+                            disabled="@(!isOnline)"
+                            title="Edit device configuration">
+                        ✎ Config
+                    </button>
+                </div>
+
+            </div>
         }
     </div>
-    
-    @if (!_devices.Any())
-    {
-        <p style="color: #7f8c8d; padding: 20px; text-align: center;">
-            No devices registered yet. Waiting for devices to register...
-        </p>
-    }
-    else
-    {
-        <table>
-            <thead>
-                <tr>
-                    <th>Device ID</th>
-                    <th>IP Address</th>
-                    <th>Command Port</th>
-                    <th>Capabilities</th>
-                    <th>Last Seen</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var device in _devices.OrderBy(d => d.DeviceId))
-                {
-                    var minutesAgo = (DateTime.UtcNow - device.LastSeen).TotalMinutes;
-                    var isOnline = minutesAgo < 5;
-                    
-                    <tr>
-                        <td>
-                            <strong>@device.DeviceId</strong>
-                            @if (isOnline)
-                            {
-                                <span class="status status-active">Online</span>
-                            }
-                            else
-                            {
-                                <span class="status status-inactive">Offline</span>
-                            }
-                        </td>
-                        <td style="color: #7f8c8d;">@device.IpAddress</td>
-                        <td style="color: #7f8c8d;">@device.CommandPort</td>
-                        <td>
-                            @foreach (var capability in device.Capabilities)
-                            {
-                                <span class="capability-tag">@capability</span>
-                            }
-                        </td>
-                        <td class="timestamp">
-                            @device.LastSeen.ToLocalTime().ToString("MMM dd HH:mm:ss")
-                            <br/>
-                            <small>(@minutesAgo.ToString("F0") min ago)</small>
-                        </td>
-                        <td>
-                            @if (device.Capabilities.Contains("relay") && device.Relays != null && device.Relays.Length > 0)
-                            {
-                                var deviceIdCopy = device.DeviceId;
-                                @foreach (var relay in device.Relays)
-                                {
-                                    var relayIdCopy = relay.Id;
-                                    var relayNameCopy = relay.Name;
-                                    // Get relay state from device registry instead of local tracking
-                                    var stateStr = device.RelayStates.GetValueOrDefault(relayIdCopy, "off");
-                                    var isOn = stateStr == "on";
-                                    <button class="refresh-btn" 
-                                            style="margin-right: 5px; background: @(isOn ? "#28a745" : "#6c757d"); color: white;" 
-                                            @onclick="@(async () => await ToggleRelay(deviceIdCopy, relayIdCopy, relayNameCopy))"
-                                            disabled="@(!isOnline)">
-                                        @(isOn ? "⚡" : "⭕") @relayNameCopy @(isOn ? "ON" : "OFF")
-                                    </button>
-                                    <br style="margin-bottom: 5px;" />
-                                }
-                            }
-                            else if (device.Capabilities.Contains("relay"))
-                            {
-                                <span style="color: #95a5a6;">Relay control (no relay info)</span>
-                            }
-                            else
-                            {
-                                <span style="color: #95a5a6;">No relay control</span>
-                            }
-                            <br />
-                            <button class="refresh-btn" 
-                                    style="background: #fd7e14; color: white; padding: 5px 10px;" 
-                                    @onclick="() => RebootDevice(device.DeviceId)"
-                                    disabled="@(!isOnline)"
-                                    title="Reboot Device">
-                                🔄 Reboot
-                            </button>
-                            <button class="refresh-btn" 
-                                    style="background: #dc3545; color: white; padding: 5px 10px; margin-left: 5px;" 
-                                    @onclick="() => EnterBootselMode(device.DeviceId)"
-                                    disabled="@(!isOnline)"
-                                    title="Enter BOOTSEL/Download Mode for Firmware Upload">
-                                ⚡ BOOTSEL
-                            </button>
-                            <button class="refresh-btn" 
-                                    style="background: #17a2b8; color: white; padding: 5px 10px; margin-left: 5px;" 
-                                    @onclick="() => ShowDeviceConfig(device.DeviceId)"
-                                    disabled="@(!isOnline)"
-                                    title="View Configuration">
-                                ℹ️ Info
-                            </button>
-                            <button class="refresh-btn" 
-                                    style="background: #6f42c1; color: white; padding: 5px 10px; margin-left: 5px;" 
-                                    @onclick="() => EditDeviceConfig(device.DeviceId)"
-                                    disabled="@(!isOnline)"
-                                    title="Edit Configuration">
-                                📝 Edit Config
-                            </button>
-                        </td>
-                    </tr>
-                    @if (_commandResults.ContainsKey(device.DeviceId))
-                    {
-                        var result = _commandResults[device.DeviceId];
-                        <tr>
-                            <td colspan="6" style="background: @(result.Success ? "#d4edda" : "#f8d7da"); 
-                                               padding: 10px; border-left: 4px solid @(result.Success ? "#28a745" : "#dc3545");">
-                                <strong>@(result.Success ? "✅" : "❌") Command Result:</strong> @result.Message
-                                @if (!string.IsNullOrEmpty(result.ErrorCode))
-                                {
-                                    <span style="color: #721c24;"> (Error: @result.ErrorCode)</span>
-                                }
-                                <button class="refresh-btn" style="float: right; padding: 5px 10px; font-size: 12px;" 
-                                        @onclick="() => ClearResult(device.DeviceId)">
-                                    ✖ Clear
-                                </button>
-                            </td>
-                        </tr>
-                    }
-                }
-            </tbody>
-        </table>
-    }
-</div>
+}
 
 @if (_showConfigModal)
 {
@@ -172,20 +195,20 @@
         <div class="modal-content" @onclick:stopPropagation="true">
             <div class="modal-header">
                 <h3>Device Configuration</h3>
-                <button class="modal-close" @onclick="CloseConfigModal">✖</button>
+                <button class="modal-close" @onclick="CloseConfigModal">✕</button>
             </div>
             <div class="modal-body">
                 @if (_configLoading)
                 {
-                    <p style="text-align: center; padding: 20px;">⏳ Loading configuration...</p>
+                    <p style="text-align:center; padding:30px; color:var(--text-secondary);">Loading…</p>
                 }
                 else if (!string.IsNullOrEmpty(_configError))
                 {
-                    <p style="color: #dc3545; padding: 20px;">❌ @_configError</p>
+                    <div class="alert alert-danger">✗ @_configError</div>
                 }
                 else if (!string.IsNullOrEmpty(_deviceConfig))
                 {
-                    <pre style="background: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 14px; line-height: 1.6;">@_deviceConfig</pre>
+                    <pre>@_deviceConfig</pre>
                 }
             </div>
         </div>
@@ -195,49 +218,38 @@
 @if (_showConfigEditor)
 {
     <div class="modal-overlay" @onclick="CloseConfigEditor">
-        <div class="modal-content" style="width: 90%; max-width: 800px;" @onclick:stopPropagation="true">
+        <div class="modal-content" style="max-width:860px;" @onclick:stopPropagation="true">
             <div class="modal-header">
-                <h3>📝 Edit Configuration - @_editingDeviceId</h3>
-                <button class="modal-close" @onclick="CloseConfigEditor">✖</button>
+                <h3>✎ Edit Config — @_editingDeviceId</h3>
+                <button class="modal-close" @onclick="CloseConfigEditor">✕</button>
             </div>
             <div class="modal-body">
                 @if (_configLoading)
                 {
-                    <p style="text-align: center; padding: 20px;">⏳ Loading configuration...</p>
+                    <p style="text-align:center; padding:30px; color:var(--text-secondary);">Loading…</p>
                 }
                 else if (!string.IsNullOrEmpty(_configError))
                 {
-                    <p style="color: #dc3545; padding: 20px;">❌ @_configError</p>
-                    <button class="refresh-btn" @onclick="() => EditDeviceConfig(_editingDeviceId!)">🔄 Retry</button>
+                    <div class="alert alert-danger">✗ @_configError</div>
+                    <button class="btn btn-secondary" @onclick="() => EditDeviceConfig(_editingDeviceId!)">↺ Retry</button>
                 }
                 else
                 {
-                    <textarea @bind="_editedConfig" 
-                              style="width: 100%; height: 500px; font-family: 'Courier New', monospace; font-size: 13px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;"
-                              spellcheck="false"></textarea>
-                    
+                    <textarea @bind="_editedConfig" spellcheck="false"></textarea>
+
                     @if (!string.IsNullOrEmpty(_saveError))
                     {
-                        <p style="color: #dc3545; margin-top: 10px;">❌ Save Error: @_saveError</p>
+                        <div class="alert alert-danger" style="margin-top:10px;">✗ @_saveError</div>
                     }
                     @if (!string.IsNullOrEmpty(_saveSuccess))
                     {
-                        <p style="color: #28a745; margin-top: 10px;">✅ @_saveSuccess</p>
+                        <div class="alert alert-success" style="margin-top:10px;">✓ @_saveSuccess</div>
                     }
-                    
-                    <div style="margin-top: 15px; text-align: right;">
-                        <button class="refresh-btn" @onclick="CloseConfigEditor" style="background: #6c757d; margin-right: 10px;">
-                            Cancel
-                        </button>
-                        <button class="refresh-btn" @onclick="SaveConfig" style="background: #28a745;" disabled="@_saving">
-                            @if (_saving)
-                            {
-                                <span>⏳ Saving...</span>
-                            }
-                            else
-                            {
-                                <span>💾 Save</span>
-                            }
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="CloseConfigEditor">Cancel</button>
+                        <button class="btn btn-primary" @onclick="SaveConfig" disabled="@_saving">
+                            @(_saving ? "Saving…" : "Save")
                         </button>
                     </div>
                 }
@@ -246,22 +258,10 @@
     </div>
 }
 
-<div class="card">
-    <h2>ℹ️ Information</h2>
-    <p style="color: #7f8c8d;">
-        This page displays all registered devices and allows you to control relays.
-        The page automatically refreshes every 15 seconds.
-    </p>
-    <ul style="margin-top: 10px; margin-left: 20px; color: #7f8c8d;">
-        <li><strong>Online</strong> - Device seen within last 5 minutes</li>
-        <li><strong>Offline</strong> - Device not seen for more than 5 minutes</li>
-        <li>Buttons are disabled when device is offline</li>
-    </ul>
-</div>
-
 @code {
     private List<DeviceInfo> _devices = new();
     private Dictionary<string, CommandResult> _commandResults = new();
+    private Dictionary<string, SensorReading> _sensorReadings = new();
     private System.Threading.Timer? _timer;
     private bool _isReInitializing = false;
     private string _reInitMessage = string.Empty;
@@ -280,12 +280,9 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadDevices();
-        
-        // Subscribe to relay state change events for instant UI updates
-        // This fires when physical buttons are pressed or external API calls change relay state
+
         ClientRegistry.OnRelayStateChanged += HandleRelayStateChanged;
-        
-        // Keep a slower timer (30s) only for heartbeat status updates (online/offline)
+
         _timer = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(async () =>
@@ -295,11 +292,9 @@
             });
         }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
-    
+
     private async void HandleRelayStateChanged()
     {
-        // Relay state changed (physical button press or external command)
-        // Update UI immediately
         await InvokeAsync(async () =>
         {
             await LoadDevices();
@@ -325,42 +320,41 @@
                 Relays = c.Relays?.Select(r => new RelayInfo { Id = r.Id, Name = r.Name }).ToArray(),
                 RelayStates = new Dictionary<string, string>(c.RelayStates)
             }).ToList();
+
+            _sensorReadings = SensorRegistry.GetAllReadings()
+                .ToDictionary(r => r.ClientId);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading devices: {ex.Message}");
         }
-        
+
         return Task.CompletedTask;
     }
-    
+
     private async Task ToggleRelay(string deviceId, string relayId, string relayName)
     {
         try
         {
-            // Get current state from registry
             var device = ClientRegistry.GetClient(deviceId);
             var currentState = device?.RelayStates.GetValueOrDefault(relayId, "off") ?? "off";
             var newState = currentState == "on" ? "off" : "on";
-            
-            // Clear previous result for this device
+
             _commandResults.Remove(deviceId);
-            
+
             var result = await CommandService.SendSetRelayCommandAsync(deviceId, relayId, newState);
-            
+
             if (result != null)
             {
                 _commandResults[deviceId] = result;
-                
-                // Update state in registry if successful
+
                 if (result.Success)
                 {
                     ClientRegistry.UpdateRelayState(deviceId, relayId, newState);
-                    // Reload devices to pick up the updated state
                     await LoadDevices();
                 }
             }
-            
+
             StateHasChanged();
         }
         catch (Exception ex)
@@ -374,7 +368,7 @@
             StateHasChanged();
         }
     }
-    
+
     private void ClearResult(string deviceId)
     {
         _commandResults.Remove(deviceId);
@@ -397,8 +391,6 @@
                 return;
             }
 
-            Console.WriteLine($"[ReInit] Starting re-initialization of {devices.Count} devices...");
-
             var successCount = 0;
             var failedDevices = new List<string>();
 
@@ -406,59 +398,41 @@
             {
                 try
                 {
-                    Console.WriteLine($"[ReInit] Sending init command to {device.ClientId} at {device.RemoteIp}:{device.CommandPort}...");
-                    
-                    // Send "init" command to trigger device re-registration
                     var initCommand = new DeviceCommand
                     {
                         CommandId = Guid.NewGuid().ToString(),
                         Type = "init",
                         Payload = System.Text.Json.JsonSerializer.SerializeToElement(new { })
                     };
-                    
+
                     var result = await CommandService.SendCommandAsync(device.ClientId, initCommand);
-                    
+
                     if (result != null && result.Success)
-                    {
-                        Console.WriteLine($"[ReInit] ✅ {device.ClientId} will re-initialize");
                         successCount++;
-                    }
                     else
-                    {
-                        Console.WriteLine($"[ReInit] ❌ {device.ClientId} init command failed - marking for removal");
                         failedDevices.Add(device.ClientId);
-                    }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    Console.WriteLine($"[ReInit] ❌ {device.ClientId} failed: {ex.Message} - marking for removal");
                     failedDevices.Add(device.ClientId);
                 }
 
                 StateHasChanged();
             }
 
-            // Remove non-responding devices from registry
             foreach (var clientId in failedDevices)
-            {
                 ClientRegistry.RemoveClient(clientId);
-                Console.WriteLine($"[ReInit] Removed non-responding device: {clientId}");
-            }
 
-            _reInitMessage = $"✅ Re-initialization complete: {successCount} devices will re-register, {failedDevices.Count} removed";
+            _reInitMessage = $"Re-init complete: {successCount} devices will re-register, {failedDevices.Count} removed";
             _reInitSuccess = successCount > 0;
 
-            Console.WriteLine($"[ReInit] Complete - {successCount} succeeded, {failedDevices.Count} removed");
-
-            // Reload devices after a short delay to show updated registrations
             await Task.Delay(2000);
             await LoadDevices();
         }
         catch (Exception ex)
         {
-            _reInitMessage = $"❌ Re-initialization failed: {ex.Message}";
+            _reInitMessage = $"Re-initialization failed: {ex.Message}";
             _reInitSuccess = false;
-            Console.WriteLine($"[ReInit] Error: {ex.Message}");
         }
         finally
         {
@@ -471,52 +445,22 @@
     {
         try
         {
-            Console.WriteLine($"[Reboot] Sending reboot command to {deviceId}...");
-            
-            var rebootCommand = new DeviceCommand
+            var result = await CommandService.SendCommandAsync(deviceId, new DeviceCommand
             {
                 CommandId = Guid.NewGuid().ToString(),
                 Type = "reboot",
                 Payload = System.Text.Json.JsonSerializer.SerializeToElement(new { })
-            };
-            
-            var result = await CommandService.SendCommandAsync(deviceId, rebootCommand);
-            
-            if (result != null && result.Success)
-            {
-                Console.WriteLine($"[Reboot] ✅ {deviceId} is rebooting");
-                
-                _commandResults[deviceId] = new CommandResult
-                {
-                    Success = true,
-                    Message = "Device is rebooting...",
-                    ErrorCode = null
-                };
-            }
-            else
-            {
-                Console.WriteLine($"[Reboot] ❌ {deviceId} reboot command failed");
-                
-                _commandResults[deviceId] = new CommandResult
-                {
-                    Success = false,
-                    Message = result?.Message ?? "Reboot command failed",
-                    ErrorCode = result?.ErrorCode ?? "REBOOT_ERROR"
-                };
-            }
+            });
+
+            _commandResults[deviceId] = result != null && result.Success
+                ? new CommandResult { Success = true, Message = "Device is rebooting…" }
+                : new CommandResult { Success = false, Message = result?.Message ?? "Reboot failed", ErrorCode = "REBOOT_ERROR" };
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Reboot] ❌ {deviceId} failed: {ex.Message}");
-            
-            _commandResults[deviceId] = new CommandResult
-            {
-                Success = false,
-                Message = $"Error: {ex.Message}",
-                ErrorCode = "REBOOT_ERROR"
-            };
+            _commandResults[deviceId] = new CommandResult { Success = false, Message = ex.Message, ErrorCode = "REBOOT_ERROR" };
         }
-        
+
         StateHasChanged();
     }
 
@@ -524,52 +468,22 @@
     {
         try
         {
-            Console.WriteLine($"[BOOTSEL] Sending bootsel command to {deviceId}...");
-            
-            var bootselCommand = new DeviceCommand
+            var result = await CommandService.SendCommandAsync(deviceId, new DeviceCommand
             {
                 CommandId = Guid.NewGuid().ToString(),
                 Type = "bootsel",
                 Payload = System.Text.Json.JsonSerializer.SerializeToElement(new { })
-            };
-            
-            var result = await CommandService.SendCommandAsync(deviceId, bootselCommand);
-            
-            if (result != null && result.Success)
-            {
-                Console.WriteLine($"[BOOTSEL] ✅ {deviceId} is entering bootloader mode");
-                
-                _commandResults[deviceId] = new CommandResult
-                {
-                    Success = true,
-                    Message = "Device entering BOOTSEL mode. You can now upload firmware via PlatformIO.",
-                    ErrorCode = null
-                };
-            }
-            else
-            {
-                Console.WriteLine($"[BOOTSEL] ❌ {deviceId} bootsel command failed");
-                
-                _commandResults[deviceId] = new CommandResult
-                {
-                    Success = false,
-                    Message = result?.Message ?? "BOOTSEL command failed",
-                    ErrorCode = result?.ErrorCode ?? "BOOTSEL_ERROR"
-                };
-            }
+            });
+
+            _commandResults[deviceId] = result != null && result.Success
+                ? new CommandResult { Success = true, Message = "Entering BOOTSEL mode. Upload firmware via PlatformIO." }
+                : new CommandResult { Success = false, Message = result?.Message ?? "BOOTSEL failed", ErrorCode = "BOOTSEL_ERROR" };
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[BOOTSEL] ❌ {deviceId} failed: {ex.Message}");
-            
-            _commandResults[deviceId] = new CommandResult
-            {
-                Success = false,
-                Message = $"Error: {ex.Message}",
-                ErrorCode = "BOOTSEL_ERROR"
-            };
+            _commandResults[deviceId] = new CommandResult { Success = false, Message = ex.Message, ErrorCode = "BOOTSEL_ERROR" };
         }
-        
+
         StateHasChanged();
     }
 
@@ -583,31 +497,20 @@
 
         try
         {
-            Console.WriteLine($"[DeviceConfig] Requesting configuration from {deviceId}...");
-            
-            var getConfigCommand = new DeviceCommand
+            var result = await CommandService.SendCommandAsync(deviceId, new DeviceCommand
             {
                 CommandId = Guid.NewGuid().ToString(),
                 Type = "getConfig",
                 Payload = System.Text.Json.JsonSerializer.SerializeToElement(new { })
-            };
-            
-            var result = await CommandService.SendCommandAsync(deviceId, getConfigCommand);
-            
+            });
+
             if (result != null && result.Success && result.Data != null)
-            {
-                Console.WriteLine($"[DeviceConfig] ✅ Configuration received from {deviceId}");
                 _deviceConfig = FormatConfiguration(deviceId, result.Data);
-            }
             else
-            {
-                Console.WriteLine($"[DeviceConfig] ❌ Failed to get configuration from {deviceId}");
                 _configError = result?.Message ?? "Failed to retrieve configuration";
-            }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[DeviceConfig] ❌ Error: {ex.Message}");
             _configError = $"Error: {ex.Message}";
         }
         finally
@@ -623,19 +526,17 @@
         {
             var json = System.Text.Json.JsonSerializer.Serialize(configData);
             var config = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
-            
+
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("=== Configuration ===");
             sb.AppendLine();
-            
-            // Build version
+
             if (config.TryGetProperty("buildVersion", out var buildVersion))
             {
                 sb.AppendLine($"Build Version: {buildVersion.GetString()}");
                 sb.AppendLine();
             }
-            
-            // Device section
+
             if (config.TryGetProperty("device", out var device))
             {
                 sb.AppendLine("Device:");
@@ -645,32 +546,25 @@
                 sb.AppendLine($"  Command Listener Port: {device.GetProperty("commandListenerPort").GetInt32()}");
                 sb.AppendLine();
             }
-            
-            // Intervals section
+
             if (config.TryGetProperty("intervals", out var intervals))
             {
                 sb.AppendLine("Intervals:");
                 sb.AppendLine($"  Heartbeat: {intervals.GetProperty("heartbeatSeconds").GetInt32()}s");
                 if (intervals.TryGetProperty("commandPollingSeconds", out var polling))
-                {
                     sb.AppendLine($"  Command Polling: {polling.GetInt32()}s");
-                }
                 sb.AppendLine("  (Sensor intervals configured per-sensor below)");
                 sb.AppendLine();
             }
-            
-            // Gateway section
+
             if (config.TryGetProperty("gateway", out var gateway))
             {
                 sb.AppendLine("Gateway:");
                 if (gateway.TryGetProperty("discoveryTimeoutSeconds", out var timeout))
-                {
                     sb.AppendLine($"  Discovery Timeout: {timeout.GetInt32()}s");
-                }
                 sb.AppendLine();
             }
-            
-            // Relays section
+
             if (config.TryGetProperty("relays", out var relays) && relays.GetArrayLength() > 0)
             {
                 sb.AppendLine($"Relays ({relays.GetArrayLength()}):");
@@ -680,52 +574,48 @@
                     var name = relay.GetProperty("name").GetString();
                     var pin = relay.GetProperty("pin").GetInt32();
                     var initialState = relay.GetProperty("initialState").GetBoolean();
-                    sb.AppendLine($"  [{id}] {name} - Pin: {pin}, Initial: {(initialState ? "ON" : "OFF")}");
+                    sb.AppendLine($"  [{id}] {name} — Pin: {pin}, Initial: {(initialState ? "ON" : "OFF")}");
                 }
                 sb.AppendLine();
             }
-            
-            // Sensors section
+
             if (config.TryGetProperty("sensors", out var sensors) && sensors.GetArrayLength() > 0)
             {
                 sb.AppendLine($"Sensors ({sensors.GetArrayLength()}):");
                 foreach (var sensor in sensors.EnumerateArray())
                 {
-                    var id = sensor.GetProperty("id").GetString();
-                    var type = sensor.GetProperty("type").GetString();
-                    var name = sensor.GetProperty("name").GetString();
-                    var i2c = sensor.GetProperty("i2cAddress").GetString();
-                    var enabled = sensor.GetProperty("enabled").GetBoolean();
+                    var id       = sensor.GetProperty("id").GetString();
+                    var type     = sensor.GetProperty("type").GetString();
+                    var name     = sensor.GetProperty("name").GetString();
+                    var i2c      = sensor.GetProperty("i2cAddress").GetString();
+                    var enabled  = sensor.GetProperty("enabled").GetBoolean();
                     var interval = sensor.GetProperty("readingIntervalSeconds").GetInt32();
-                    sb.AppendLine($"  [{id}] {name} - Type: {type}, I2C: {i2c}, Enabled: {enabled}, Interval: {interval}s");
+                    sb.AppendLine($"  [{id}] {name} — Type: {type}, I2C: {i2c}, Enabled: {enabled}, Interval: {interval}s");
                 }
                 sb.AppendLine();
             }
-            
-            // Buttons section
+
             if (config.TryGetProperty("buttons", out var buttons) && buttons.GetArrayLength() > 0)
             {
                 sb.AppendLine($"Buttons ({buttons.GetArrayLength()}):");
                 foreach (var button in buttons.EnumerateArray())
                 {
-                    var id = button.GetProperty("id").GetString();
-                    var name = button.GetProperty("name").GetString();
-                    var pin = button.GetProperty("pin").GetInt32();
+                    var id           = button.GetProperty("id").GetString();
+                    var name         = button.GetProperty("name").GetString();
+                    var pin          = button.GetProperty("pin").GetInt32();
                     var targetDevice = button.GetProperty("targetDevice").GetString();
-                    var targetRelay = button.GetProperty("targetRelay").GetString();
-                    var enabled = button.GetProperty("enabled").GetBoolean();
-                    sb.AppendLine($"  [{id}] {name} - Pin: {pin}, Target: {targetDevice}/{targetRelay}, Enabled: {enabled}");
+                    var targetRelay  = button.GetProperty("targetRelay").GetString();
+                    var enabled      = button.GetProperty("enabled").GetBoolean();
+                    sb.AppendLine($"  [{id}] {name} — Pin: {pin}, Target: {targetDevice}/{targetRelay}, Enabled: {enabled}");
                 }
                 sb.AppendLine();
             }
-            
+
             sb.AppendLine("=====================");
-            
             return sb.ToString();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[DeviceConfig] Format error: {ex.Message}");
             return $"Error formatting configuration: {ex.Message}";
         }
     }
@@ -751,15 +641,14 @@
         {
             var httpClient = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
             var response = await httpClient.GetAsync($"/api/devices/{deviceId}/config");
-            
+
             if (response.IsSuccessStatusCode)
             {
                 var result = await response.Content.ReadFromJsonAsync<GetConfigResponse>();
                 if (result != null && !string.IsNullOrEmpty(result.ConfigJson))
                 {
-                    // Pretty-print the JSON
                     var jsonDoc = System.Text.Json.JsonDocument.Parse(result.ConfigJson);
-                    _editedConfig = System.Text.Json.JsonSerializer.Serialize(jsonDoc, 
+                    _editedConfig = System.Text.Json.JsonSerializer.Serialize(jsonDoc,
                         new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
                 }
                 else
@@ -792,11 +681,7 @@
 
         try
         {
-            // Validate JSON
-            try
-            {
-                System.Text.Json.JsonDocument.Parse(_editedConfig);
-            }
+            try { System.Text.Json.JsonDocument.Parse(_editedConfig); }
             catch (System.Text.Json.JsonException ex)
             {
                 _saveError = $"Invalid JSON: {ex.Message}";
@@ -808,10 +693,10 @@
             var httpClient = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
             var payload = new SetConfigPayload { ConfigJson = _editedConfig };
             var response = await httpClient.PostAsJsonAsync($"/api/devices/{_editingDeviceId}/config", payload);
-            
+
             if (response.IsSuccessStatusCode)
             {
-                _saveSuccess = "Configuration saved successfully! Device will use new config.";
+                _saveSuccess = "Configuration saved. Device will use new config on next restart.";
                 await Task.Delay(2000);
                 CloseConfigEditor();
             }
@@ -848,7 +733,6 @@
         _timer?.Dispose();
     }
 
-    // Model class for deserialization - matches ClientInfo fields we need
     private class DeviceInfo
     {
         public string ClientId { get; set; } = string.Empty;
@@ -861,8 +745,7 @@
         public string[] Capabilities { get; set; } = Array.Empty<string>();
         public RelayInfo[]? Relays { get; set; }
         public Dictionary<string, string> RelayStates { get; set; } = new();
-        
-        // Properties for backwards compatibility with existing code
+
         public string DeviceId => ClientId;
         public string IpAddress => RemoteIp ?? "unknown";
         public DateTime LastSeen => LastHeartbeatUtc;

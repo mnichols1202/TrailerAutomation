@@ -1,13 +1,11 @@
-import os
-from pathlib import Path
-
 Import("env")
+import os
 
-# Ensure PlatformIO uses the bundled mklittlefs tool by absolute path
-packages_dir = Path(env.subst("$PROJECT_PACKAGES_DIR"))
-exe_name = "mklittlefs.exe" if os.name == "nt" else "mklittlefs"
-mklittlefs_path = packages_dir / "tool-mklittlefs" / exe_name
+data_dir = os.path.join(env.get("PROJECT_DIR"), "data")
 
-# Point the builder at the exact executable and add its directory to PATH
-env.Replace(MKFS_LITTLEFS=str(mklittlefs_path))
-env.AppendENVPath("PATH", str(mklittlefs_path.parent))
+if not os.path.exists(data_dir):
+    print(f"WARNING: data/ directory not found at {data_dir}")
+    print("         Create data/config.json before building unified image.")
+else:
+    print(f"LittleFS data directory: {data_dir}")
+    env.Replace(PROJECTDATA_DIR=data_dir)

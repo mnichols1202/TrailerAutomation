@@ -193,38 +193,60 @@ bool startMdns()
 
 bool discoverGateway()
 {
-    // Query for the same service type used by TrailerAutomationGateway:
-    //
-    // C# uses "_trailer-gateway._tcp" (see MdnsHost.cs).
-    // LEAmDNS expects service name and protocol WITHOUT leading underscores.
-    int n = MDNS.queryService(MDNS_SERVICE_NAME, MDNS_SERVICE_PROTO);
+    const DeviceConfig& config = getDeviceConfig();
+    const int MAX_ATTEMPTS = 5;
+    const unsigned long RETRY_DELAY_MS = 3000UL;
 
-    if (n <= 0)
+    for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
     {
-        logLine("mDNS queryService returned no results.");
-        return false;
+        logLine("mDNS discovery attempt " + String(attempt) +
+                "/" + String(MAX_ATTEMPTS));
+
+        // LEAmDNS leaves a broken receive socket after a failed queryService().
+        // end()+begin() tears it down and rebuilds clean.
+        // ESPmDNS (S3) does NOT need this fix.
+        MDNS.end();
+        delay(100);
+        if (!MDNS.begin(config.clientId))
+        {
+            logLine("  mDNS restart failed on attempt " + String(attempt));
+        }
+        delay(200);
+
+        int n = MDNS.queryService(MDNS_SERVICE_NAME, MDNS_SERVICE_PROTO);
+
+        if (n > 0)
+        {
+            IPAddress hostIp = MDNS.IP(0);
+            uint16_t  port   = MDNS.port(0);
+
+            if (hostIp)
+            {
+                g_gatewayHost  = hostIp.toString();
+                g_gatewayPort  = (port != 0) ? port : GATEWAY_DEFAULT_PORT;
+                g_gatewayKnown = true;
+                Serial.print("Gateway discovered at http://");
+                Serial.print(g_gatewayHost);
+                Serial.print(":");
+                Serial.println(g_gatewayPort);
+                return true;
+            }
+            logLine("  Result had no valid IP, retrying...");
+        }
+        else
+        {
+            logLine("  No response. Gateway may still be initializing.");
+        }
+
+        if (attempt < MAX_ATTEMPTS)
+        {
+            logLine("  Waiting 3s before next attempt...");
+            delay(RETRY_DELAY_MS);
+        }
     }
 
-    // Take the first result
-    IPAddress hostIp = MDNS.IP(0);
-    uint16_t port    = MDNS.port(0);
-
-    if (!hostIp)
-    {
-        logLine("mDNS result did not contain a valid IP address.");
-        return false;
-    }
-
-    g_gatewayHost  = hostIp.toString();
-    g_gatewayPort  = (port != 0) ? port : GATEWAY_DEFAULT_PORT;
-    g_gatewayKnown = true;
-
-    Serial.print("Gateway discovered at http://");
-    Serial.print(g_gatewayHost);
-    Serial.print(":");
-    Serial.println(g_gatewayPort);
-
-    return true;
+    logLine("Gateway discovery failed after all attempts.");
+    return false;
 }
 
 // -----------------------------------------------------------------------------

@@ -1,27 +1,31 @@
 {
   "folders": [
-    {
-      "name": "TrailerAutomation (Root)",
-      "path": "."
-    },
-    {
-      "name": "ClientPico (PlatformIO)",
-      "path": "TrailerAutomationClientPico"
-    },
-    {
-      "name": "ClientS3 (PlatformIO)",
-      "path": "TrailerAutomationClientS3"
-    }
+    { "name": "Gateway (C#)", "path": "TrailerAutomationGateway" },
+    { "name": "ClientNet (C#)", "path": "TrailerAutomationClientNet" },
+    { "name": "ClientS3 (PlatformIO)", "path": "TrailerAutomationClientS3" },
+    { "name": "ClientPico (PlatformIO)", "path": "TrailerAutomationClientPico" },
+    { "name": "Root", "path": "." }
   ],
   "settings": {
-    "platformio-ide.activateOnlyOnPlatformIOProject": false,
+    "platformio-ide.activateOnlyOnPlatformIOProject": true,
     "dotnet.server.useOmnisharp": false,
     "files.exclude": {
       "**/bin": true,
       "**/obj": true,
       "**/.pio": true,
-      "**/__pycache__": true
+      "**/__pycache__": true,
+      "**/.git": true
     },
-    "powershell.cwd": "ClientPico (PlatformIO)"
+    "terminal.integrated.cwd": "${workspaceFolder}",
+    "editor.formatOnSave": true,
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "clangd.enabled": false
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-dotnettools.csdevkit",
+      "platformio.platformio-ide",
+      "ms-vscode.cpptools"
+    ]
   }
 }

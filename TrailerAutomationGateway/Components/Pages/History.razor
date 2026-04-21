@@ -3,69 +3,69 @@
 @inject SensorReadingRepository Repository
 @inject IJSRuntime JS
 
-<PageTitle>Sensor History</PageTitle>
+<PageTitle>History</PageTitle>
+
+<div class="page-header">
+    <h2 style="margin: 0; padding: 0;">Sensor History — Last 24 Hours</h2>
+    <div class="page-header-actions">
+        <span class="toolbar-meta">
+            <strong>@_readings.Count</strong> readings
+        </span>
+    </div>
+</div>
 
 <div class="card">
-    <h2>📈 Sensor History - Last 24 Hours</h2>
-    
-    <div style="margin-bottom: 20px;">
-        <label for="clientSelect">Select Client: </label>
-        <select id="clientSelect" @onchange="OnClientChanged" style="padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+    <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <label class="form-label" for="clientSelect">Client</label>
+        <select id="clientSelect" class="form-select" @onchange="OnClientChanged">
             @foreach (var client in _availableClients)
             {
                 <option value="@client" selected="@(client == _selectedClient)">@client</option>
             }
         </select>
-        
-        <label for="unitSelect" style="margin-left: 20px;">Temperature Unit: </label>
-        <select id="unitSelect" @onchange="OnUnitChanged" style="padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
-            <option value="C" selected="@(_useFahrenheit == false)">Celsius (°C)</option>
-            <option value="F" selected="@(_useFahrenheit == true)">Fahrenheit (°F)</option>
+
+        <label class="form-label" for="unitSelect">Unit</label>
+        <select id="unitSelect" class="form-select" @onchange="OnUnitChanged">
+            <option value="C" selected="@(_useFahrenheit == false)">°C Celsius</option>
+            <option value="F" selected="@(_useFahrenheit == true)">°F Fahrenheit</option>
         </select>
-        
-        <button class="refresh-btn" style="margin-left: 20px;" @onclick="LoadData">🔄 Refresh</button>
-        
-        <button class="refresh-btn btn-danger" style="margin-left: 20px;" @onclick="ResetData">🗑️ Reset All Data</button>
-        
+
+        <button class="btn btn-secondary" @onclick="LoadData">↺ Refresh</button>
+        <button class="btn btn-danger" @onclick="ResetData">🗑 Reset All Data</button>
+
         @if (_isLoading)
         {
-            <span style="margin-left: 20px; color: #7f8c8d;">Loading...</span>
+            <span class="toolbar-meta">Loading…</span>
         }
     </div>
-    
-    <div style="margin-bottom: 20px;">
-        <p style="color: #7f8c8d;">
-            Showing <strong>@_readings.Count</strong> readings from the last 24 hours
-        </p>
-    </div>
-    
-    <div style="position: relative; height: 400px;">
+
+    <div class="chart-container">
         <canvas id="sensorChart"></canvas>
     </div>
 </div>
 
 <div class="card">
-    <h2>📊 Statistics</h2>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-        <div>
-            <div style="color: #7f8c8d; font-size: 14px;">Average Temperature</div>
-            <div class="metric">@FormatTemp(_avgTemp)</div>
-            @if (!_useFahrenheit)
+    <h2>Statistics</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Avg Temperature</div>
+            <div class="stat-value" style="color: var(--temp-color);">@FormatTemp(_avgTemp)</div>
+            @if (!_useFahrenheit && _readings.Any())
             {
-                <div style="color: #95a5a6; font-size: 14px;">@((_avgTemp * 9 / 5 + 32).ToString("F1"))°F</div>
+                <div class="stat-sub">@((_avgTemp * 9.0 / 5.0 + 32).ToString("F1"))°F</div>
             }
         </div>
-        <div>
-            <div style="color: #7f8c8d; font-size: 14px;">Min Temperature</div>
-            <div class="metric" style="color: #3498db;">@FormatTemp(_minTemp)</div>
+        <div class="stat-card">
+            <div class="stat-label">Min Temperature</div>
+            <div class="stat-value" style="color: var(--humidity-color);">@FormatTemp(_minTemp)</div>
         </div>
-        <div>
-            <div style="color: #7f8c8d; font-size: 14px;">Max Temperature</div>
-            <div class="metric" style="color: #e74c3c;">@FormatTemp(_maxTemp)</div>
+        <div class="stat-card">
+            <div class="stat-label">Max Temperature</div>
+            <div class="stat-value" style="color: var(--accent-red);">@FormatTemp(_maxTemp)</div>
         </div>
-        <div>
-            <div style="color: #7f8c8d; font-size: 14px;">Average Humidity</div>
-            <div class="metric">@_avgHumidity.ToString("F1")%</div>
+        <div class="stat-card">
+            <div class="stat-label">Avg Humidity</div>
+            <div class="stat-value" style="color: var(--humidity-color);">@_avgHumidity.ToString("F1")%</div>
         </div>
     </div>
 </div>
@@ -76,7 +76,7 @@
     private string _selectedClient = "";
     private bool _isLoading = false;
     private bool _useFahrenheit = false;
-    
+
     private double _avgTemp;
     private double _minTemp;
     private double _maxTemp;
@@ -92,12 +92,11 @@
     {
         if (firstRender)
         {
-            // Load temperature unit preference from localStorage
             var savedUnit = await JS.InvokeAsync<string>("localStorage.getItem", "tempUnit");
             _useFahrenheit = savedUnit == "F";
             StateHasChanged();
         }
-        
+
         if (_readings.Any())
         {
             await UpdateChart();
@@ -108,17 +107,15 @@
     {
         var from = DateTime.UtcNow.AddHours(-24);
         var allReadings = Repository.GetAllHistory(from, null, 10000).ToList();
-        
+
         _availableClients = allReadings
             .Select(r => r.ClientId)
             .Distinct()
             .OrderBy(c => c)
             .ToList();
-        
+
         if (_availableClients.Any() && string.IsNullOrEmpty(_selectedClient))
-        {
             _selectedClient = _availableClients.First();
-        }
     }
 
     private async Task OnClientChanged(ChangeEventArgs e)
@@ -131,11 +128,7 @@
     {
         var unit = e.Value?.ToString() ?? "C";
         _useFahrenheit = unit == "F";
-        
-        // Save preference to localStorage
         await JS.InvokeVoidAsync("localStorage.setItem", "tempUnit", unit);
-        
-        // Trigger chart update
         StateHasChanged();
         await UpdateChart();
     }
@@ -144,20 +137,15 @@
     {
         _isLoading = true;
         StateHasChanged();
-        
+
         var from = DateTime.UtcNow.AddHours(-24);
-        
-        if (!string.IsNullOrEmpty(_selectedClient))
-        {
-            _readings = Repository.GetHistory(_selectedClient, from, null, 10000)
+
+        _readings = string.IsNullOrEmpty(_selectedClient)
+            ? new List<SensorReading>()
+            : Repository.GetHistory(_selectedClient, from, null, 10000)
                 .OrderBy(r => r.TimestampUtc)
                 .ToList();
-        }
-        else
-        {
-            _readings = new List<SensorReading>();
-        }
-        
+
         CalculateStats();
         _isLoading = false;
     }
@@ -166,9 +154,9 @@
     {
         if (_readings.Any())
         {
-            _avgTemp = _readings.Average(r => r.TemperatureC);
-            _minTemp = _readings.Min(r => r.TemperatureC);
-            _maxTemp = _readings.Max(r => r.TemperatureC);
+            _avgTemp     = _readings.Average(r => r.TemperatureC);
+            _minTemp     = _readings.Min(r => r.TemperatureC);
+            _maxTemp     = _readings.Max(r => r.TemperatureC);
             _avgHumidity = _readings.Average(r => r.HumidityPercent);
         }
         else
@@ -180,36 +168,31 @@
     private string FormatTemp(double tempC)
     {
         if (_useFahrenheit)
-        {
-            var tempF = tempC * 9 / 5 + 32;
-            return $"{tempF:F1}°F";
-        }
+            return $"{tempC * 9.0 / 5.0 + 32:F1}°F";
         return $"{tempC:F1}°C";
     }
 
     private async Task UpdateChart()
     {
         if (!_readings.Any()) return;
-        
-        var labels = _readings.Select(r => r.TimestampUtc.ToLocalTime().ToString("MM/dd HH:mm")).ToList();
-        var tempData = _readings.Select(r => _useFahrenheit ? r.TemperatureC * 9 / 5 + 32 : r.TemperatureC).ToList();
+
+        var labels      = _readings.Select(r => r.TimestampUtc.ToLocalTime().ToString("MM/dd HH:mm")).ToList();
+        var tempData    = _readings.Select(r => _useFahrenheit ? r.TemperatureC * 9.0 / 5.0 + 32 : r.TemperatureC).ToList();
         var humidityData = _readings.Select(r => r.HumidityPercent).ToList();
-        var tempUnit = _useFahrenheit ? "°F" : "°C";
-        
+        var tempUnit    = _useFahrenheit ? "°F" : "°C";
+
         await JS.InvokeVoidAsync("updateSensorChart", labels, tempData, humidityData, tempUnit);
     }
 
     private async Task ResetData()
     {
         var totalCount = Repository.GetTotalCount();
-        var confirmed = await JS.InvokeAsync<bool>("confirm", 
-            $"Are you sure you want to delete ALL {totalCount} sensor readings? This action cannot be undone!");
-        
+        var confirmed = await JS.InvokeAsync<bool>("confirm",
+            $"Delete ALL {totalCount} sensor readings? This cannot be undone.");
+
         if (confirmed)
         {
-            var deletedCount = Repository.DeleteAll();
-            Console.WriteLine($"[History] Deleted {deletedCount} sensor readings");
-            
+            Repository.DeleteAll();
             await LoadAvailableClients();
             _readings = new List<SensorReading>();
             _selectedClient = _availableClients.FirstOrDefault() ?? "";

@@ -5,104 +5,81 @@
 @inject ClientRegistry ClientRegistry
 @implements IDisposable
 
-<PageTitle>Sensor Readings</PageTitle>
+<PageTitle>Sensors</PageTitle>
 
-<div class="card">
-    <h2>📊 Current Sensor Readings</h2>
-    
-    @if (!_currentReadings.Any())
-    {
-        <p style="color: #7f8c8d; padding: 20px; text-align: center;">
-            No sensor readings available yet. Waiting for devices to report...
-        </p>
-    }
-    else
-    {
-        <div style="margin-bottom: 20px;">
-            <button class="refresh-btn" @onclick="LoadData">🔄 Refresh</button>
-            <span style="margin-left: 20px; color: #7f8c8d;">
-                Total readings in database: <strong>@_totalCount</strong>
-            </span>
-            <span style="margin-left: 20px; color: #7f8c8d;">
-                Last updated: <strong>@DateTime.Now.ToString("HH:mm:ss")</strong>
-            </span>
-        </div>
-        
-        <table>
-            <thead>
-                <tr>
-                    <th>Client ID</th>
-                    <th>Temperature</th>
-                    <th>Humidity</th>
-                    <th>Last Updated</th>
-                    <th>Remote IP</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var reading in _currentReadings.OrderBy(r => r.ClientId))
-                {
-                    var minutesAgo = (DateTime.UtcNow - reading.TimestampUtc).TotalMinutes;
-                    var staleThresholdMinutes = _staleThresholdMinutes;
-                    var isRecent = minutesAgo < staleThresholdMinutes;
-                    
-                    <tr>
-                        <td>
-                            <strong>@reading.ClientId</strong>
-                            @if (isRecent)
-                            {
-                                <span class="status status-active">Active</span>
-                            }
-                            else
-                            {
-                                <span class="status status-inactive">Stale</span>
-                            }
-                        </td>
-                        <td>
-                            <span class="temp-reading">@reading.TemperatureC.ToString("F1")°C</span>
-                            <span style="color: #95a5a6;">(@((reading.TemperatureC * 9 / 5 + 32).ToString("F1"))°F)</span>
-                        </td>
-                        <td>
-                            <span class="humidity-reading">@reading.HumidityPercent.ToString("F1")%</span>
-                        </td>
-                        <td class="timestamp">
-                            @reading.TimestampUtc.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss")
-                            <br/>
-                            <small>(@minutesAgo.ToString("F0") min ago)</small>
-                        </td>
-                        <td style="color: #7f8c8d; font-size: 14px;">
-                            @(reading.RemoteIp ?? "unknown")
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
+<div class="page-header">
+    <h2 style="margin: 0; padding: 0;">Sensor Readings</h2>
+    <div class="page-header-actions">
+        <span class="toolbar-meta">
+            <strong>@_totalCount</strong> readings in database
+            &nbsp;·&nbsp;
+            Updated <strong>@DateTime.Now.ToString("HH:mm:ss")</strong>
+        </span>
+        <button class="btn btn-secondary" @onclick="LoadData">↺ Refresh</button>
+    </div>
 </div>
 
-<div class="card">
-    <h2>ℹ️ Information</h2>
-    <p style="color: #7f8c8d;">
-        This page displays the latest sensor readings from all connected devices.
-        The page automatically refreshes every 10 seconds.
-    </p>
-    <ul style="margin-top: 10px; margin-left: 20px; color: #7f8c8d;">
-        <li><strong>Active</strong> - Reading received within last @_staleThresholdMinutes minutes</li>
-        <li><strong>Stale</strong> - No reading received for more than @_staleThresholdMinutes minutes</li>
-        <li>Stale threshold is 3x the longest configured sensor interval</li>
+@if (!_currentReadings.Any())
+{
+    <div class="empty-state">
+        <span class="empty-state-icon" style="font-size:48px; opacity:0.3;">---</span>
+        <p>No sensor readings yet. Waiting for devices to report…</p>
+    </div>
+}
+else
+{
+    <div class="sensor-grid">
+        @foreach (var reading in _currentReadings.OrderBy(r => r.ClientId))
+        {
+            var minutesAgo = (DateTime.UtcNow - reading.TimestampUtc).TotalMinutes;
+            var isActive = minutesAgo < _staleThresholdMinutes;
+            var tempF = reading.TemperatureC * 9.0 / 5.0 + 32;
+
+            <div class="sensor-card @(isActive ? "active" : "stale")">
+                <div class="sensor-card-header">
+                    <span class="sensor-card-name">@reading.ClientId</span>
+                    <span class="status @(isActive ? "status-active" : "status-inactive")">
+                        @(isActive ? "Active" : "Stale")
+                    </span>
+                </div>
+                <div class="sensor-card-body">
+                    <div class="sensor-metric">
+                        <span class="sensor-metric-label">Temperature</span>
+                        <span class="sensor-metric-value temp">@reading.TemperatureC.ToString("F1")°C</span>
+                        <span class="sensor-metric-sub">@tempF.ToString("F1")°F</span>
+                    </div>
+                    <div class="sensor-metric">
+                        <span class="sensor-metric-label">Humidity</span>
+                        <span class="sensor-metric-value humidity">@reading.HumidityPercent.ToString("F1")%</span>
+                    </div>
+                </div>
+                <div class="sensor-card-footer">
+                    <span>@reading.TimestampUtc.ToLocalTime().ToString("MMM dd HH:mm:ss")</span>
+                    <span>@minutesAgo.ToString("F0")m ago</span>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<div class="info-card">
+    <p>Auto-refreshes every 10 seconds. Readings older than @_staleThresholdMinutes minutes are marked <strong>Stale</strong>.</p>
+    <ul>
+        <li>Stale threshold = 3× the longest configured sensor interval</li>
+        <li>IP: shown in device registry on the Devices page</li>
     </ul>
 </div>
 
 @code {
     private List<SensorReading> _currentReadings = new();
     private int _totalCount;
-    private int _staleThresholdMinutes = 15;  // Default to 15 minutes
+    private int _staleThresholdMinutes = 15;
     private System.Threading.Timer? _timer;
 
     protected override void OnInitialized()
     {
         LoadData();
-        
-        // Auto-refresh every 10 seconds
+
         _timer = new System.Threading.Timer(_ =>
         {
             InvokeAsync(() =>
@@ -117,15 +94,8 @@
     {
         _currentReadings = Registry.GetAllReadings().ToList();
         _totalCount = Repository.GetTotalCount();
-        
-        // Calculate stale threshold: 3x the longest sensor interval
-        // Since we don't track sensor intervals in ClientInfo, use 3x 5 minutes = 15 minutes as default
-        // In future, could track actual intervals by monitoring time between readings per client
-        _staleThresholdMinutes = 15; // 3x typical 300-second (5 minute) interval
+        _staleThresholdMinutes = 15;
     }
 
-    public void Dispose()
-    {
-        _timer?.Dispose();
-    }
+    public void Dispose() => _timer?.Dispose();
 }

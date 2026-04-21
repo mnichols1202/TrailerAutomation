@@ -14,12 +14,12 @@
             "serverReadyAction": {
                 "action": "openExternally",
                 "pattern": "\\bNow listening on:\\s+(https?://\\S+)",
-                "uriFormat": "%s/swagger"
+                "uriFormat": "%s/devices"
             },
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development"
             },
-            "console": "internalConsole"
+            "console": "integratedTerminal"
         },
         {
             "name": "Launch ClientNet",
@@ -30,7 +30,7 @@
             "args": [],
             "cwd": "${workspaceFolder}/TrailerAutomationClientNet",
             "stopAtEntry": false,
-            "console": "internalConsole"
+            "console": "integratedTerminal"
         }
     ]
 }
