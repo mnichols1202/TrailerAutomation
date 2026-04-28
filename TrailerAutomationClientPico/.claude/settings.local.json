@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "PowerShell(& \"C:\\\\Users\\\\MichaelNichols.AzureAD\\\\Source\\\\TrailerAutomation\\\\TrailerAutomationGateway\\\\generate_version.ps1\")",
+      "PowerShell(& \"C:\\\\Users\\\\MichaelNichols.AzureAD\\\\Source\\\\TrailerAutomation\\\\TrailerAutomationClientNet\\\\generate_version.ps1\")",
+      "PowerShell(powershell.exe -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\MichaelNichols.AzureAD\\\\Source\\\\TrailerAutomation\\\\TrailerAutomationGateway\\\\generate_version.ps1\"; powershell.exe -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\MichaelNichols.AzureAD\\\\Source\\\\TrailerAutomation\\\\TrailerAutomationClientNet\\\\generate_version.ps1\")",
+      "Bash(pio run *)",
+      "PowerShell($pio = \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\"; Set-Location \"C:\\\\Users\\\\MichaelNichols.AzureAD\\\\Source\\\\TrailerAutomation\\\\TrailerAutomationClientPico\"; & $pio run -e picow --target buildunified 2>&1)",
+      "PowerShell($pio = \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\"; Set-Location \"C:\\\\Users\\\\MichaelNichols.AzureAD\\\\Source\\\\TrailerAutomation\\\\TrailerAutomationClientPico\"; & $pio run -e picow --target buildunified 2>&1 | Select-Object -Last 40)"
     ]
   }
 }
