@@ -101,7 +101,10 @@ void loop()
 {
     // Update LED animation
     updateLed();
-    
+
+    // Always service buttons regardless of network state
+    checkButtons();
+
     // Check if boot delay is complete
     if (!g_bootDelayComplete)
     {
@@ -246,13 +249,10 @@ void loop()
         }
     }
 
-    // 4. Check buttons (non-blocking)
-    checkButtons();
-
-    // 5. Process incoming commands (non-blocking)
+    // 4. Process incoming commands (non-blocking)
     processCommandListener();
 
-    // 6. Heartbeat timing
+    // 5. Heartbeat timing
     if (now - g_lastHeartbeatMs >= g_heartbeatIntervalMs)
     {
         // sendHeartbeat() returns true on success
@@ -304,7 +304,7 @@ void loop()
         g_lastHeartbeatMs = now;
     }
 
-    // 7. Sensor timing (independent of heartbeat) - check each sensor independently
+    // 6. Sensor timing (independent of heartbeat) - check each sensor independently
     if (isSensorAvailable())
     {
         const DeviceConfig& config = getDeviceConfig();
@@ -335,6 +335,6 @@ void loop()
         }
     }
 
-    // 8. Small delay to avoid busy spin
+    // 7. Small delay to avoid busy spin
     delay(10);
 }

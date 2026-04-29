@@ -3,6 +3,7 @@
 @inject ClientRegistry ClientRegistry
 @inject DeviceCommandService CommandService
 @inject SensorReadingRegistry SensorRegistry
+@inject HttpClient Http
 @implements IDisposable
 
 <PageTitle>Devices</PageTitle>
@@ -182,6 +183,12 @@ else
                             title="Edit device configuration">
                         ✎ Config
                     </button>
+                    <button class="btn btn-ota"
+                            @onclick="() => OpenOtaModal(device.DeviceId)"
+                            disabled="@(!isOnline)"
+                            title="Flash firmware over-the-air">
+                        ⬆ Flash
+                    </button>
                 </div>
 
             </div>
@@ -209,6 +216,55 @@ else
                 else if (!string.IsNullOrEmpty(_deviceConfig))
                 {
                     <pre>@_deviceConfig</pre>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showOtaModal)
+{
+    <div class="modal-overlay" @onclick="CloseOtaModal">
+        <div class="modal-content" style="max-width:480px;" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>⬆ Flash Firmware — @_otaDeviceId</h3>
+                <button class="modal-close" @onclick="CloseOtaModal">✕</button>
+            </div>
+            <div class="modal-body">
+                @if (_otaUploading)
+                {
+                    <p style="text-align:center; padding:30px; color:var(--text-secondary);">Uploading and flashing…</p>
+                }
+                else
+                {
+                    <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">
+                        Select a <strong>.bin</strong> firmware file built by PlatformIO.
+                        The device will download and apply it, then reboot automatically.
+                    </p>
+
+                    <InputFile OnChange="OtaFileSelected" accept=".bin" style="width:100%; margin-bottom:12px;" />
+
+                    @if (!string.IsNullOrEmpty(_otaFilename))
+                    {
+                        <p style="font-size:12px; color:var(--text-secondary);">Selected: @_otaFilename (@(_otaFileSize / 1024) KB)</p>
+                    }
+
+                    @if (!string.IsNullOrEmpty(_otaError))
+                    {
+                        <div class="alert alert-danger">✗ @_otaError</div>
+                    }
+                    @if (!string.IsNullOrEmpty(_otaSuccess))
+                    {
+                        <div class="alert alert-success">✓ @_otaSuccess</div>
+                    }
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="CloseOtaModal">Cancel</button>
+                        <button class="btn btn-ota" @onclick="StartOtaFlash"
+                                disabled="@(_otaFileData == null || _otaUploading)">
+                            ⬆ Flash Now
+                        </button>
+                    </div>
                 }
             </div>
         </div>
@@ -276,6 +332,16 @@ else
     private string _saveError = string.Empty;
     private string _saveSuccess = string.Empty;
     private string? _editingDeviceId = null;
+
+    // OTA state
+    private bool _showOtaModal = false;
+    private bool _otaUploading = false;
+    private string? _otaDeviceId = null;
+    private byte[]? _otaFileData = null;
+    private string _otaFilename = string.Empty;
+    private long _otaFileSize = 0;
+    private string _otaError = string.Empty;
+    private string _otaSuccess = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -725,6 +791,88 @@ else
         _saveError = string.Empty;
         _saveSuccess = string.Empty;
         StateHasChanged();
+    }
+
+    private void OpenOtaModal(string deviceId)
+    {
+        _otaDeviceId = deviceId;
+        _otaFileData = null;
+        _otaFilename = string.Empty;
+        _otaFileSize = 0;
+        _otaError = string.Empty;
+        _otaSuccess = string.Empty;
+        _otaUploading = false;
+        _showOtaModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseOtaModal()
+    {
+        _showOtaModal = false;
+        _otaDeviceId = null;
+        _otaFileData = null;
+        StateHasChanged();
+    }
+
+    private async Task OtaFileSelected(InputFileChangeEventArgs e)
+    {
+        _otaError = string.Empty;
+        _otaSuccess = string.Empty;
+        var file = e.File;
+
+        if (file.Size > 8 * 1024 * 1024)
+        {
+            _otaError = "File too large (max 8 MB)";
+            _otaFileData = null;
+            return;
+        }
+
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(maxAllowedSize: 8 * 1024 * 1024).CopyToAsync(ms);
+        _otaFileData = ms.ToArray();
+        _otaFilename = file.Name;
+        _otaFileSize = file.Size;
+        StateHasChanged();
+    }
+
+    private async Task StartOtaFlash()
+    {
+        if (_otaFileData == null || string.IsNullOrEmpty(_otaDeviceId)) return;
+
+        _otaUploading = true;
+        _otaError = string.Empty;
+        _otaSuccess = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            content.Add(new ByteArrayContent(_otaFileData), "firmware", _otaFilename);
+
+            var response = await Http.PostAsync($"/api/ota/upload/{_otaDeviceId}", content);
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                _otaSuccess = $"OTA command sent. {_otaDeviceId} is flashing and will reboot shortly.";
+                _otaFileData = null;
+            }
+            else
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(body);
+                var msg = doc.RootElement.TryGetProperty("message", out var m) ? m.GetString() : body;
+                _otaError = msg ?? "OTA failed";
+            }
+        }
+        catch (Exception ex)
+        {
+            _otaError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _otaUploading = false;
+            StateHasChanged();
+        }
     }
 
     public void Dispose()

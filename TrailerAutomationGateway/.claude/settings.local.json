@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(& \"c:\\\\Users\\\\MichaelNichols\\\\source\\\\TrailerAutomation\\\\TrailerAutomationClientNet\\\\generate_version.ps1\")",
+      "PowerShell(Get-Command pio -ErrorAction SilentlyContinue)",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(python3 -)"
+    ]
+  }
+}

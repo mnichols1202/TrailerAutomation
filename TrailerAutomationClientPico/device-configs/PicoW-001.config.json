@@ -1,0 +1,81 @@
+{
+  "WiFi": {
+    "SSID": "Paradise_Loop",
+    "Password": "S3cur1ty3742"
+  },
+  "Device": {
+    "ClientId": "PicoW-001",
+    "DeviceType": "PicoW",
+    "FriendlyName": "Trailer Controller",
+    "CommandListenerPort": 8888
+  },
+  "Intervals": {
+    "HeartbeatSeconds": 60
+  },
+  "Hardware": {
+    "Relays": [
+      {
+        "Id": "1",
+        "Name": "Water Heater",
+        "Pin": 6,
+        "InitialState": false,
+        "Enabled": true
+      },
+      {
+        "Id": "2",
+        "Name": "Water Pump",
+        "Pin": 7,
+        "InitialState": false,
+        "Enabled": true
+      },
+      {
+        "Id": "3",
+        "Name": "Exterior Lights",
+        "Pin": 8,
+        "InitialState": false,
+        "Enabled": true
+      },
+      {
+        "Id": "4",
+        "Name": "Interior Lights",
+        "Pin": 9,
+        "InitialState": false,
+        "Enabled": true
+      }
+    ],
+    "Buttons": [
+      {
+        "Id": "button1",
+        "Name": "Water Heater Button",
+        "Pin": 0,
+        "TargetDevice": "PicoW-001",
+        "TargetRelay": "1",
+        "Enabled": true
+      },
+      {
+        "Id": "button2",
+        "Name": "Water Pump Button",
+        "Pin": 1,
+        "TargetDevice": "PicoW-001",
+        "TargetRelay": "2",
+        "Enabled": true
+      },
+      {
+        "Id": "button3",
+        "Name": "Exterior Lights Button",
+        "Pin": 2,
+        "TargetDevice": "PicoW-001",
+        "TargetRelay": "3",
+        "Enabled": true
+      },
+      {
+        "Id": "button4",
+        "Name": "Interior Lights Button",
+        "Pin": 3,
+        "TargetDevice": "PicoW-001",
+        "TargetRelay": "4",
+        "Enabled": true
+      }
+    ]
+  }
+}

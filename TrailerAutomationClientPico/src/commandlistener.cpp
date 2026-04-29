@@ -3,6 +3,7 @@
 #include "relaycontrol.h"
 #include "logging.h"
 #include "button.h"
+#include "otaupdate.h"
 #include "BuildVersion.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
@@ -189,20 +190,53 @@ void processCommandListener()
         // Send success response first, then reboot
         respDoc["success"] = true;
         respDoc["message"] = "Device rebooting";
-        
+
         logLine("[CommandListener] Reboot command received, device will restart in 1 second");
-        
+
         // Send response
         String response;
         serializeJson(respDoc, response);
         client.println(response);
         client.flush();
         client.stop();
-        
+
         // Wait a moment for response to be sent, then reboot
         delay(1000);
         rp2040.reboot();
         return;  // Never reached
+    }
+    else if (strcmp(commandType, "ota") == 0)
+    {
+        JsonObject payload = cmdDoc["payload"];
+        const char* firmwareUrl = payload ? (const char*)payload["url"] : nullptr;
+
+        if (!firmwareUrl || strlen(firmwareUrl) == 0)
+        {
+            respDoc["success"] = false;
+            respDoc["message"] = "Missing payload.url";
+            respDoc["errorCode"] = "MISSING_URL";
+        }
+        else
+        {
+            // Acknowledge before starting — device will reboot on success
+            respDoc["success"] = true;
+            respDoc["message"] = "OTA update starting";
+
+            String response;
+            serializeJson(respDoc, response);
+            client.println(response);
+            client.flush();
+            client.stop();
+
+            logLine("[CommandListener] OTA command received, fetching firmware from: " + String(firmwareUrl));
+            delay(500);
+
+            if (!performOtaUpdate(firmwareUrl))
+            {
+                logLine("[CommandListener] OTA failed — device continuing normally");
+            }
+            return;  // Never reached on success (device reboots); reached on failure
+        }
     }
     else if (strcmp(commandType, "getRelayState") == 0)
     {

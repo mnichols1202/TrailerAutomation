@@ -607,6 +607,13 @@ h2 {
 }
 .btn-purple:hover:not(:disabled) { background: rgba(188, 140, 255, 0.2); }
 
+.btn-ota {
+    background: rgba(63, 185, 80, 0.1);
+    color: var(--accent-green);
+    border-color: rgba(63, 185, 80, 0.3);
+}
+.btn-ota:hover:not(:disabled) { background: rgba(63, 185, 80, 0.2); }
+
 /* Legacy compat */
 .refresh-btn {
     display: inline-flex;

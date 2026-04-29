@@ -1,0 +1,27 @@
+{
+  "WiFi": {
+    "SSID": "Paradise_Loop",
+    "Password": "S3cur1ty3742"
+  },
+  "Device": {
+    "ClientId": "Pico-Outside",
+    "DeviceType": "PICOW",
+    "FriendlyName": "Pico Outside",
+    "CommandListenerPort": 8888
+  },
+  "Intervals": {
+    "HeartbeatSeconds": 60
+  },
+  "Hardware": {
+    "Sensors": [
+      {
+        "Id": "sht31-main",
+        "Type": "SHT31",
+        "Name": "Temperature & Humidity",
+        "I2cAddress": "0x44",
+        "Enabled": true,
+        "ReadingIntervalSeconds": 1800
+      }
+    ]
+  }
+}

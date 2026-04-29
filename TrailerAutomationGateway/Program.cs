@@ -2,6 +2,8 @@ using Microsoft.OpenApi.Models;
 using TrailerAutomationGateway;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +29,7 @@ builder.Services.AddSingleton(new ClientRegistry(TimeSpan.FromSeconds(60), maxMi
 builder.Services.AddSingleton<SensorReadingRepository>();  // LiteDB persistence
 builder.Services.AddSingleton<SensorReadingRegistry>();    // sensor registry
 builder.Services.AddScoped<DeviceCommandService>();        // device command service
+builder.Services.AddSingleton<OtaFirmwareStore>();         // OTA firmware staging
 // HttpClient for Blazor components with connection pooling
 builder.Services.AddHttpClient("DeviceClient", client =>
 {
@@ -613,6 +616,103 @@ app.MapDelete("/api/sensor-readings/reset", (SensorReadingRepository repository)
 })
 .WithName("ResetSensorReadings")
 .WithOpenApi();
+
+// OTA: upload firmware binary and push to device
+app.MapPost("/api/ota/upload/{deviceId}", async (
+    string deviceId,
+    HttpRequest request,
+    OtaFirmwareStore otaStore,
+    DeviceCommandService commandService,
+    ClientRegistry clientRegistry) =>
+{
+    Console.WriteLine($"[OTA] POST /api/ota/upload/{deviceId} {DateTime.UtcNow:O}");
+
+    if (!request.HasFormContentType)
+        return Results.BadRequest(new { success = false, message = "Expected multipart/form-data" });
+
+    var form = await request.ReadFormAsync();
+    var file = form.Files.GetFile("firmware");
+    if (file == null || file.Length == 0)
+        return Results.BadRequest(new { success = false, message = "No firmware file provided" });
+
+    if (file.Length > 8 * 1024 * 1024)
+        return Results.BadRequest(new { success = false, message = "Firmware file too large (max 8 MB)" });
+
+    var client = clientRegistry.GetClient(deviceId);
+    if (client == null)
+        return Results.NotFound(new { success = false, message = $"Device '{deviceId}' not found" });
+
+    // Read the binary into memory
+    byte[] firmware;
+    using (var ms = new MemoryStream((int)file.Length))
+    {
+        await file.CopyToAsync(ms);
+        firmware = ms.ToArray();
+    }
+
+    otaStore.Store(deviceId, firmware, file.FileName);
+    Console.WriteLine($"[OTA] Stored {firmware.Length} bytes for device {deviceId} ({file.FileName})");
+
+    // Build the URL the device will use to fetch the binary
+    string gatewayIp = GetLocalIpAddress();
+    string firmwareUrl = $"http://{gatewayIp}:{gatewayPort}/api/ota/firmware/{deviceId}";
+
+    // Send OTA command via existing TCP channel
+    var command = new DeviceCommand
+    {
+        CommandId = Guid.NewGuid().ToString(),
+        Type = "ota",
+        Payload = JsonSerializer.SerializeToElement(new { url = firmwareUrl })
+    };
+
+    var result = await commandService.SendCommandAsync(deviceId, command);
+
+    if (result.Success)
+    {
+        Console.WriteLine($"[OTA] OTA command accepted by {deviceId}, firmware URL: {firmwareUrl}");
+        return Results.Ok(new { success = true, message = $"OTA started on {deviceId}. Device will reboot after flashing.", firmwareUrl });
+    }
+    else
+    {
+        otaStore.Remove(deviceId);
+        Console.WriteLine($"[OTA] OTA command rejected by {deviceId}: {result.Message}");
+        return Results.BadRequest(new { success = false, message = result.Message ?? "Device rejected OTA command" });
+    }
+})
+.WithName("OtaUpload")
+.DisableAntiforgery()
+.WithOpenApi();
+
+// OTA: serve stored firmware binary to device
+app.MapGet("/api/ota/firmware/{deviceId}", (string deviceId, OtaFirmwareStore otaStore) =>
+{
+    Console.WriteLine($"[OTA] GET /api/ota/firmware/{deviceId} {DateTime.UtcNow:O}");
+
+    var entry = otaStore.Get(deviceId);
+    if (entry == null)
+        return Results.NotFound(new { message = "No firmware staged for this device" });
+
+    otaStore.Remove(deviceId); // One-shot: remove after serving
+    return Results.File(entry.Value.Data, "application/octet-stream", entry.Value.Filename);
+})
+.WithName("OtaServeFirmware")
+.WithOpenApi();
+
+static string GetLocalIpAddress()
+{
+    foreach (var iface in NetworkInterface.GetAllNetworkInterfaces())
+    {
+        if (iface.OperationalStatus != OperationalStatus.Up) continue;
+        if (iface.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+
+        foreach (var addr in iface.GetIPProperties().UnicastAddresses)
+        {
+            if (addr.Address.AddressFamily == AddressFamily.InterNetwork)
+                return addr.Address.ToString();
+        }
+    }
+    return "localhost";
+}
 
 // mDNS advertising
 app.Lifetime.ApplicationStarted.Register(() =>
