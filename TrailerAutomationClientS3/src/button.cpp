@@ -6,17 +6,25 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
-// Button state tracking
+// Button polling runs on a FreeRTOS task pinned to core 1; all network I/O
+// must stay on core 0. On a press edge, the button task toggles the relay
+// GPIO immediately (light turns on), then enqueues a notification. Core 0
+// drains the queue and POSTs to the gateway when it can. If the gateway is
+// offline, the notification is dropped — the relay is already in the correct
+// physical state.
+
 struct ButtonState
 {
     int pin;
-    bool lastValue;          // Last raw reading (for debounce detection)
-    bool lastStableValue;    // Last stable reading after debounce
+    bool lastValue;          // raw reading, for debounce detection
+    bool lastStableValue;    // post-debounce stable reading
     unsigned long lastDebounceTime;
     char targetDevice[MAX_DEVICE_ID_LEN];
     char targetRelay[MAX_RELAY_ID_LEN];
-    bool relayState;  // Track relay state locally like web UI
+    volatile bool relayState;  // mirrors physical relay; touched by both cores
 };
 
 static ButtonState g_buttonStates[MAX_BUTTONS];
@@ -25,6 +33,63 @@ static bool g_buttonsInitialized = false;
 
 #define DEBOUNCE_DELAY_MS 50
 
+// ---------------------------------------------------------------------------
+// Cross-core SPSC notification queue
+// ---------------------------------------------------------------------------
+// Producer: button task (core 1). Consumer: main loop (core 0).
+// 32-bit aligned loads/stores are atomic on the Xtensa LX7 cores;
+// __sync_synchronize() guarantees slot contents are visible before the
+// head index is published.
+
+#define NOTIFY_QUEUE_SIZE 16
+
+enum NotifyKind : uint8_t
+{
+    NOTIFY_LOCAL_STATE   = 1,  // POST /api/devices/{me}/relays/{id}/state?state=...
+    NOTIFY_REMOTE_TOGGLE = 2   // POST /api/devices/{other}/relays/{id}/toggle
+};
+
+struct PendingNotify
+{
+    uint8_t kind;
+    bool    state;                                   // only meaningful for LOCAL_STATE
+    char    targetDevice[MAX_DEVICE_ID_LEN];
+    char    relayId[MAX_RELAY_ID_LEN];
+};
+
+static PendingNotify   g_notifyQueue[NOTIFY_QUEUE_SIZE];
+static volatile uint8_t g_notifyHead = 0;   // written by core 1
+static volatile uint8_t g_notifyTail = 0;   // written by core 0
+
+static void enqueueNotify(const PendingNotify& n)
+{
+    uint8_t head = g_notifyHead;
+    uint8_t next = (head + 1) % NOTIFY_QUEUE_SIZE;
+    if (next == g_notifyTail)
+    {
+        // Queue full — drop this notification. SPSC discipline: only the
+        // consumer (core 0) advances tail. The relay is already in the
+        // correct physical state; the gateway just misses one update.
+        logLine("[Notify] Queue full, dropping notification for " + String(n.relayId));
+        return;
+    }
+    g_notifyQueue[head] = n;
+    __sync_synchronize();
+    g_notifyHead = next;
+}
+
+static bool dequeueNotify(PendingNotify& out)
+{
+    uint8_t tail = g_notifyTail;
+    if (tail == g_notifyHead) return false;
+    out = g_notifyQueue[tail];
+    __sync_synchronize();
+    g_notifyTail = (tail + 1) % NOTIFY_QUEUE_SIZE;
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+
 bool initButtons()
 {
     if (!isSdConfigLoaded())
@@ -32,53 +97,50 @@ bool initButtons()
         logLine("ERROR: Cannot initialize buttons - config not loaded");
         return false;
     }
-    
+
     const DeviceConfig& config = getDeviceConfig();
     g_buttonCount = config.buttonCount;
-    
+
     if (g_buttonCount == 0)
     {
         logLine("No buttons configured");
         g_buttonsInitialized = true;
         return true;
     }
-    
+
     logLine("Initializing " + String(g_buttonCount) + " button(s)...");
-    
+
     for (int i = 0; i < g_buttonCount; i++)
     {
         const ButtonConfig& btn = config.buttons[i];
-        
+
         if (!btn.enabled)
         {
             logLine("Button '" + String(btn.name) + "' disabled, skipping");
             continue;
         }
-        
-        // Configure pin as input with pull-up (active LOW)
+
+        // Active LOW with internal pull-up
         pinMode(btn.pin, INPUT_PULLUP);
-        
-        // Initialize state tracking
+
         g_buttonStates[i].pin = btn.pin;
-        g_buttonStates[i].lastValue = HIGH;       // Pull-up = HIGH when not pressed
-        g_buttonStates[i].lastStableValue = HIGH; // Pull-up = HIGH when not pressed
+        g_buttonStates[i].lastValue = HIGH;
+        g_buttonStates[i].lastStableValue = HIGH;
         g_buttonStates[i].lastDebounceTime = 0;
         strncpy(g_buttonStates[i].targetDevice, btn.targetDevice, MAX_DEVICE_ID_LEN - 1);
         strncpy(g_buttonStates[i].targetRelay, btn.targetRelay, MAX_RELAY_ID_LEN - 1);
-        
-        // Read actual relay state instead of assuming false
+
         bool actualState = false;
         if (strcmp(btn.targetDevice, config.clientId) == 0)
         {
-            // Local relay - read actual GPIO state
             getRelayState(btn.targetRelay, &actualState);
         }
         g_buttonStates[i].relayState = actualState;
-        
-        logLine("Button '" + String(btn.name) + "' initialized on pin " + String(btn.pin) + 
+
+        logLine("Button '" + String(btn.name) + "' initialized on pin " + String(btn.pin) +
                 " -> " + String(btn.targetDevice) + ":" + String(btn.targetRelay));
     }
-    
+
     g_buttonsInitialized = true;
     logLine("Button initialization complete");
     return true;
@@ -86,86 +148,41 @@ bool initButtons()
 
 static void handleLocalToggle(ButtonState* btnState)
 {
-    // Flip local state tracking (like web UI does)
-    btnState->relayState = !btnState->relayState;
-    
-    if (setRelayState(btnState->targetRelay, btnState->relayState))
+    bool newState = !btnState->relayState;
+
+    if (setRelayState(btnState->targetRelay, newState))
     {
-        logLine("[Button] Set local relay '" + String(btnState->targetRelay) + "' to " + (btnState->relayState ? "ON" : "OFF"));
-        
-        // Notify gateway of state change so web UI updates (best-effort, non-blocking)
-        const char* stateStr = btnState->relayState ? "on" : "off";
+        btnState->relayState = newState;
+        logLine("[Button] Set local relay '" + String(btnState->targetRelay) + "' to " + (newState ? "ON" : "OFF"));
+
+        // Light is already in the right state. Hand off the gateway notification
+        // to core 0 so we never block button polling on network I/O.
         const DeviceConfig& config = getDeviceConfig();
-        
-        if (isGatewayKnown() && WiFi.status() == WL_CONNECTED)
-        {
-            String url = "http://" + getGatewayHost() + ":" + String(getGatewayPort()) + 
-                         "/api/devices/" + String(config.clientId) + 
-                         "/relays/" + String(btnState->targetRelay) + "/state?state=" + stateStr;
-            
-            HTTPClient http;
-            http.begin(url);
-            http.setTimeout(1000);  // Fast timeout for responsive button feel
-            
-            logLine("[Button] Notifying gateway (best-effort)");
-            
-            int httpCode = http.POST("");
-            
-            if (httpCode == HTTP_CODE_OK)
-            {
-                logLine("[Button] Gateway notified successfully");
-            }
-            else
-            {
-                logLine("[Button] Gateway notification failed (offline?) - relay still activated");
-            }
-            
-            http.end();
-        }
-        else
-        {
-            logLine("[Button] Gateway offline - relay activated locally only");
-        }
+        PendingNotify n = {};
+        n.kind  = NOTIFY_LOCAL_STATE;
+        n.state = newState;
+        strncpy(n.targetDevice, config.clientId, MAX_DEVICE_ID_LEN - 1);
+        strncpy(n.relayId,      btnState->targetRelay, MAX_RELAY_ID_LEN - 1);
+        enqueueNotify(n);
     }
     else
     {
         logLine("[Button] ERROR: Failed to set relay state for '" + String(btnState->targetRelay) + "'");
-        // Revert state on failure
-        btnState->relayState = !btnState->relayState;
     }
 }
 
 static void handleRemoteToggle(ButtonState* btnState)
 {
-    // Send toggle command to gateway which will forward to remote device
-    if (!isGatewayKnown())
-    {
-        logLine("[Button] ERROR: Gateway unknown, cannot control remote relay");
-        return;
-    }
-    
-    String url = "http://" + getGatewayHost() + ":" + String(getGatewayPort()) + 
-                 "/api/devices/" + String(btnState->targetDevice) + 
-                 "/relays/" + String(btnState->targetRelay) + "/toggle";
-    
-    HTTPClient http;
-    http.begin(url);
-    http.setTimeout(5000);
-    
-    logLine("[Button] Toggling remote relay " + String(btnState->targetDevice) + ":" + String(btnState->targetRelay));
-    
-    int httpCode = http.POST("");
-    
-    if (httpCode == HTTP_CODE_OK)
-    {
-        logLine("[Button] Remote relay toggled successfully");
-    }
-    else
-    {
-        logLine("[Button] ERROR: Remote toggle failed, HTTP code " + String(httpCode));
-    }
-    
-    http.end();
+    // Remote toggle goes through the gateway. Queue it for core 0 — if the
+    // gateway is offline, this notification will be dropped during drain.
+    PendingNotify n = {};
+    n.kind  = NOTIFY_REMOTE_TOGGLE;
+    n.state = false;
+    strncpy(n.targetDevice, btnState->targetDevice, MAX_DEVICE_ID_LEN - 1);
+    strncpy(n.relayId,      btnState->targetRelay, MAX_RELAY_ID_LEN - 1);
+    enqueueNotify(n);
+
+    logLine("[Button] Queued remote toggle for " + String(btnState->targetDevice) + ":" + String(btnState->targetRelay));
 }
 
 void checkButtons()
@@ -174,54 +191,46 @@ void checkButtons()
     {
         return;
     }
-    
+
     const DeviceConfig& config = getDeviceConfig();
     unsigned long now = millis();
-    
+
     for (int i = 0; i < g_buttonCount; i++)
     {
         const ButtonConfig& btn = config.buttons[i];
-        
+
         if (!btn.enabled)
         {
             continue;
         }
-        
+
         ButtonState& state = g_buttonStates[i];
-        
-        // Read current button state (active LOW)
+
         bool currentReading = digitalRead(state.pin);
-        
-        // Check if state changed (reset debounce timer)
+
         if (currentReading != state.lastValue)
         {
             state.lastDebounceTime = now;
             state.lastValue = currentReading;
         }
-        
-        // If debounce time has passed, the reading is stable
+
         if ((now - state.lastDebounceTime) > DEBOUNCE_DELAY_MS)
         {
-            // Check for rising edge (Low -> High transition after debounce)
+            // Rising edge after debounce: button was pressed and released.
             if (state.lastStableValue == LOW && currentReading == HIGH)
             {
-                // Button was pressed and now released - toggle!
                 logLine("[Button] Button '" + String(btn.name) + "' pressed");
-                
-                // Check if target is local or remote
+
                 if (strcmp(state.targetDevice, config.clientId) == 0)
                 {
-                    // Local relay
                     handleLocalToggle(&state);
                 }
                 else
                 {
-                    // Remote relay
                     handleRemoteToggle(&state);
                 }
             }
-            
-            // Update stable value after debounce period
+
             state.lastStableValue = currentReading;
         }
     }
@@ -233,16 +242,92 @@ void syncButtonRelayState(const char* relayId, bool state)
     {
         return;
     }
-    
-    // Update button state tracking for any buttons targeting this relay
+
     for (int i = 0; i < g_buttonCount; i++)
     {
         ButtonState& btnState = g_buttonStates[i];
-        
+
         if (strcmp(btnState.targetRelay, relayId) == 0)
         {
             btnState.relayState = state;
             logLine("[Button] Synced button state for relay '" + String(relayId) + "' to " + (state ? "ON" : "OFF"));
         }
     }
+}
+
+// FreeRTOS task body — polls buttons forever on core 1.
+static void buttonTask(void* arg)
+{
+    (void)arg;
+    logLine("[Button] Polling task started on core " + String(xPortGetCoreID()));
+    for (;;)
+    {
+        checkButtons();
+        vTaskDelay(pdMS_TO_TICKS(20));   // ~50 Hz
+    }
+}
+
+bool startButtonTask()
+{
+    BaseType_t ok = xTaskCreatePinnedToCore(
+        buttonTask,
+        "buttonPoll",
+        4096,
+        nullptr,
+        2,        // priority: above idle, below WiFi/lwIP
+        nullptr,
+        1         // pin to core 1
+    );
+
+    if (ok != pdPASS)
+    {
+        logLine("ERROR: Failed to create button polling task");
+        return false;
+    }
+    return true;
+}
+
+void drainPendingNotifications()
+{
+    // Send at most one notification per call so we don't stall the main loop
+    // when the queue is full. Network I/O only happens here (core 0).
+    PendingNotify n;
+    if (!dequeueNotify(n)) return;
+
+    if (!isGatewayKnown() || WiFi.status() != WL_CONNECTED)
+    {
+        logLine("[Notify] Gateway offline, dropping " + String(n.relayId));
+        return;
+    }
+
+    String url = "http://" + getGatewayHost() + ":" + String(getGatewayPort()) +
+                 "/api/devices/" + String(n.targetDevice) +
+                 "/relays/" + String(n.relayId);
+
+    if (n.kind == NOTIFY_LOCAL_STATE)
+    {
+        url += "/state?state=";
+        url += (n.state ? "on" : "off");
+    }
+    else  // NOTIFY_REMOTE_TOGGLE
+    {
+        url += "/toggle";
+    }
+
+    HTTPClient http;
+    http.begin(url);
+    http.setTimeout(2000);   // short — must not stall the main loop
+    int httpCode = http.POST("");
+
+    if (httpCode == HTTP_CODE_OK)
+    {
+        logLine("[Notify] Sent " + String(n.kind == NOTIFY_LOCAL_STATE ? "state" : "toggle") +
+                " for " + String(n.relayId));
+    }
+    else
+    {
+        logLine("[Notify] HTTP " + String(httpCode) + " for " + String(n.relayId));
+    }
+
+    http.end();
 }

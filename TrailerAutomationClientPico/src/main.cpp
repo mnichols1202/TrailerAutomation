@@ -18,6 +18,10 @@ static unsigned long g_bootDelayStartMs = 0;
 static bool g_bootDelayComplete = false;
 bool g_deviceRegistered = false;  // Non-static so commandlistener can access
 
+// Set by core 0 once config is loaded and relays are initialized. Core 1
+// (button polling) waits on this before calling initButtons().
+volatile bool g_core1Ready = false;
+
 // Gateway reconnection tracking
 static int g_consecutiveHeartbeatFailures = 0;
 static const int MAX_FAILURES_BEFORE_REDISCOVERY = 3;
@@ -82,14 +86,44 @@ void setup()
     {
         logLine("WARNING: Relay control initialization failed");
     }
-    
-    // Initialize button control from config
+
+    // Buttons are initialized and polled on core 1 (setup1 / loop1) so that
+    // a button press always actuates its relay, even when core 0 is blocked
+    // for tens of seconds inside ensureWifiConnected() or discoverGateway()
+    // during a network outage. Signal core 1 that it's safe to proceed.
+    g_core1Ready = true;
+
+    // Note: WiFi connection will happen in loop() after boot delay
+}
+
+// ---------------------------------------------------------------------------
+// Core 1: dedicated button polling
+// ---------------------------------------------------------------------------
+// The arduino-pico framework calls setup1() / loop1() on core 1 in parallel
+// with setup() / loop() on core 0. Keeping button polling here means it
+// runs at a steady ~50 Hz regardless of what the network code on core 0 is
+// doing. Button handlers do the local relay digitalWrite immediately and
+// hand off any HTTP notification to core 0 via a lock-free queue (see
+// drainPendingNotifications in button.cpp).
+
+void setup1()
+{
+    // Wait until core 0 has loaded config and initialized relay GPIOs.
+    while (!g_core1Ready)
+    {
+        delay(10);
+    }
+
     if (!initButtons())
     {
-        logLine("WARNING: Button initialization failed");
+        logLine("WARNING: Button initialization failed on core 1");
     }
-    
-    // Note: WiFi connection will happen in loop() after boot delay
+}
+
+void loop1()
+{
+    checkButtons();
+    delay(20);   // ~50 Hz — well below the 50 ms debounce window
 }
 
 void loop()
@@ -97,8 +131,10 @@ void loop()
     // Update LED animation
     updateLed();
 
-    // Always service buttons regardless of network state
-    checkButtons();
+    // Button polling runs on core 1 (loop1). On core 0, we just drain any
+    // notifications it queued so the gateway sees state changes when the
+    // network is available.
+    drainPendingNotifications();
 
     // Check if boot delay is complete
     if (!g_bootDelayComplete)
@@ -197,6 +233,7 @@ void loop()
         {
             logLine("Gateway discovery attempt failed; will retry.");
             setLedError(ERROR_MDNS);  // 1 red blink - mDNS/Gateway discovery failed
+            delay(2000);  // backoff between mDNS attempts (was implicit in old retry loop)
             return;
         }
 

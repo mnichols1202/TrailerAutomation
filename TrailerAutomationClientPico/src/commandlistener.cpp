@@ -12,6 +12,20 @@
 static WiFiServer* g_commandServer = nullptr;
 static bool g_listenerInitialized = false;
 
+// Returns the silicon model the firmware was compiled for. Uses Pico SDK
+// macros (primary) and arduino-pico arch macros (fallback). This is tamper-
+// proof: it reflects the build target, not anything in config.json.
+static const char* getChipModel()
+{
+#if defined(PICO_RP2350) || defined(ARDUINO_ARCH_RP2350)
+    return "RP2350";
+#elif defined(PICO_RP2040) || defined(ARDUINO_ARCH_RP2040)
+    return "RP2040";
+#else
+    return "Unknown";
+#endif
+}
+
 bool initCommandListener()
 {
     if (!isFsConfigLoaded())
@@ -143,15 +157,16 @@ void processCommandListener()
     {
         // Return actual ClientId so gateway can verify identity
         const DeviceConfig& config = getDeviceConfig();
-        
+
         respDoc["success"] = true;
         respDoc["message"] = "Device identified";
-        
+
         JsonObject data = respDoc["data"].to<JsonObject>();
         data["clientId"] = config.clientId;
         data["deviceType"] = config.deviceType;
         data["friendlyName"] = config.friendlyName;
-        
+        data["chipModel"] = getChipModel();   // RP2040 or RP2350 — set at compile time
+
         logLine("[CommandListener] Identify command received, responding with ClientId: " + String(config.clientId));
     }
     else if (strcmp(commandType, "init") == 0)
@@ -327,51 +342,6 @@ void processCommandListener()
             }
         }
     }
-    else if (strcmp(commandType, "getRelayState") == 0)
-    {
-        // Extract payload
-        JsonObject payload = cmdDoc["payload"];
-        
-        if (!payload)
-        {
-            respDoc["success"] = false;
-            respDoc["message"] = "Missing payload";
-            respDoc["errorCode"] = "MISSING_PAYLOAD";
-        }
-        else
-        {
-            const char* relayId = payload["relayId"];
-            
-            if (!relayId)
-            {
-                respDoc["success"] = false;
-                respDoc["message"] = "Invalid payload: relayId required";
-                respDoc["errorCode"] = "INVALID_PAYLOAD";
-            }
-            else
-            {
-                bool state = false;
-                
-                if (getRelayState(relayId, &state))
-                {
-                    const char* stateStr = state ? "on" : "off";
-                    
-                    respDoc["success"] = true;
-                    respDoc["message"] = String("Relay '") + relayId + "' state retrieved";
-                    
-                    JsonObject data = respDoc["data"].to<JsonObject>();
-                    data["relayId"] = relayId;
-                    data["state"] = stateStr;
-                }
-                else
-                {
-                    respDoc["success"] = false;
-                    respDoc["message"] = String("Relay '") + relayId + "' not found";
-                    respDoc["errorCode"] = "RELAY_NOT_FOUND";
-                }
-            }
-        }
-    }
     else if (strcmp(commandType, "getConfig") == 0)
     {
         // Return device configuration as structured data (for Info display)
@@ -381,10 +351,11 @@ void processCommandListener()
         respDoc["message"] = "Configuration retrieved";
         
         JsonObject data = respDoc["data"].to<JsonObject>();
-        
-        // Build version
+
+        // Build version + silicon model (set at compile time, tamper-proof)
         data["buildVersion"] = BUILD_VERSION;
-        
+        data["chipModel"]    = getChipModel();
+
         // Device section
         JsonObject device = data["device"].to<JsonObject>();
         device["clientId"] = config.clientId;

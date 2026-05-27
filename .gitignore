@@ -365,3 +365,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Device config snapshots (contain WiFi credentials — rotate before tracking)
+/data-*.json

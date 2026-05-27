@@ -22,4 +22,11 @@ void checkButtons();
  */
 void syncButtonRelayState(const char* relayId, bool state);
 
+/**
+ * Drain one pending gateway notification queued by a button press.
+ * MUST be called from core 0 only — performs HTTP I/O. Call from the main
+ * loop; sends at most one notification per call to avoid stalling.
+ */
+void drainPendingNotifications();
+
 #endif // BUTTON_H

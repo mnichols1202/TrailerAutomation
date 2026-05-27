@@ -76,6 +76,7 @@ bool sendSensorReading()
     HTTPClient http;
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
+    http.setTimeout(3000);  // cap blocking time on a dead/slow gateway
 
     int httpCode = http.POST(reinterpret_cast<uint8_t*>(const_cast<char*>(payload.c_str())), payload.length());
 

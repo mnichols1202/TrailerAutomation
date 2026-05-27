@@ -11,7 +11,7 @@ bool performOtaUpdate(const char* url)
     setLedState(LED_CONNECTING);  // Solid blue while downloading
 
     WiFiClient client;
-    httpUpdate.setTimeout(30000);  // 30 s
+    client.setTimeout(30000);  // 30 s socket timeout (HTTPUpdate v3.x API)
 
     httpUpdate.onStart([]() {
         logLine("[OTA] Download started");

@@ -35,6 +35,10 @@ static String getWiFiStatusString(int status)
     }
 }
 
+// Single non-blocking-ish WiFi attempt: total worst case ~5.5s.
+// Returns true if already (or now) connected, false otherwise. The main
+// loop pages this on each iteration, so failure just means "try again next
+// time" — no inner retry loop is needed.
 bool ensureWifiConnected()
 {
     if (WiFi.status() == WL_CONNECTED)
@@ -42,127 +46,34 @@ bool ensureWifiConnected()
         return true;
     }
 
-    logLine("Wi-Fi not connected, attempting to connect...");
-
-    // Get WiFi credentials from config
     const DeviceConfig& config = getDeviceConfig();
-    
-    logLine("WiFi Configuration:");
-    logLine("  SSID: [" + String(config.wifiSSID) + "]");
-    logLine("  Password: [" + String(config.wifiPassword) + "]");
-    logLine("  SSID Length: " + String(strlen(config.wifiSSID)));
-    logLine("  Password Length: " + String(strlen(config.wifiPassword)));
-    
-    // Print MAC address for router whitelisting
-    uint8_t mac[6];
-    WiFi.macAddress(mac);
-    char macStr[18];
-    sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    logLine("  Pico 2W MAC: " + String(macStr));
 
-    // Try multiple connection attempts with increasing delays
-    // Pico 2W doesn't support power level adjustment like ESP32
-    for (int attempt = 1; attempt <= 3; attempt++)
+    // First call after a failure (or first call period): kick off a fresh
+    // connect attempt. We do NOT cycle WIFI_OFF → WIFI_STA every call — that
+    // was 2 s of pure delay() on every iteration. WiFi.begin() called against
+    // an already-STA-mode driver just restarts the association.
+    logLine("Wi-Fi not connected, starting attempt (SSID: [" + String(config.wifiSSID) + "])");
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(config.wifiSSID, config.wifiPassword);
+
+    const unsigned long timeoutMs = 5000UL;
+    const unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED && (millis() - start) < timeoutMs)
     {
-        logLine("Connection attempt " + String(attempt) + "/3...");
-        
-        // Properly disconnect and reset WiFi to clear any bad state
-        WiFi.disconnect();
-        delay(500);
-        WiFi.mode(WIFI_OFF);
-        delay(500);
-        
-        // Start fresh
-        WiFi.mode(WIFI_STA);
-        delay(1000);
-        
-        // Use progressively longer delays for unstable connections
-        // Lower delays first, increase if connection fails
-        unsigned long timeoutMs;
-        if (attempt == 1)
-        {
-            timeoutMs = 15000UL;  // 15s timeout - quick first try
-            logLine("  Using SHORT timeout (15s) for quick check");
-        }
-        else if (attempt == 2)
-        {
-            timeoutMs = 20000UL;  // 20s timeout - medium
-            logLine("  Using MEDIUM timeout (20s)");
-        }
-        else
-        {
-            timeoutMs = 30000UL;  // 30s timeout - long final attempt
-            logLine("  Using LONG timeout (30s) - final attempt");
-        }
-        
-        // Begin connection
-        WiFi.begin(config.wifiSSID, config.wifiPassword);
-        
-        const unsigned long start = millis();
-        int lastStatus = -1;
-
-        while (WiFi.status() != WL_CONNECTED && (millis() - start) < timeoutMs)
-        {
-            delay(500);
-            Serial.print(".");
-            
-            // Log status changes
-            int currentStatus = WiFi.status();
-            if (currentStatus != lastStatus)
-            {
-                Serial.println();
-                logLine("  Status changed to: " + String(currentStatus) + " [" + getWiFiStatusString(currentStatus) + "]");
-                lastStatus = currentStatus;
-            }
-        }
-        Serial.println();
-        
-        if (WiFi.status() == WL_CONNECTED)
-        {
-            logLine("✅ Wi-Fi connected successfully on attempt " + String(attempt));
-            Serial.print("  IP address: ");
-            Serial.println(WiFi.localIP());
-            Serial.print("  Gateway: ");
-            Serial.println(WiFi.gatewayIP());
-            Serial.print("  DNS: ");
-            Serial.println(WiFi.dnsIP());
-            Serial.print("  RSSI: ");
-            Serial.print(WiFi.RSSI());
-            Serial.println(" dBm");
-            
-            g_lastWifiError = 0;
-            return true;
-        }
-        
-        logLine("❌ Attempt " + String(attempt) + " failed with status: " + getWiFiStatusString(WiFi.status()));
-        
-        if (attempt < 3)
-        {
-            delay(2000);  // Wait before next attempt
-        }
+        delay(100);
     }
-    
-    // All attempts failed
+
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        logLine("Wi-Fi connected. IP=" + WiFi.localIP().toString() +
+                " RSSI=" + String(WiFi.RSSI()) + " dBm");
+        g_lastWifiError = 0;
+        return true;
+    }
+
     g_lastWifiError = WiFi.status();
-    logLine("ERROR: All WiFi connection attempts failed!");
-    
-    // Log specific error
-    switch (WiFi.status())
-    {
-        case WL_NO_SSID_AVAIL:
-            logLine("Wi-Fi error: SSID not found");
-            break;
-        case WL_CONNECT_FAILED:
-            logLine("Wi-Fi error: Connection failed (wrong password?)");
-            break;
-        case WL_DISCONNECTED:
-            logLine("Wi-Fi error: Disconnected");
-            break;
-        default:
-            logLine(String("Wi-Fi connection timeout. Status: ") + String(WiFi.status()));
-            break;
-    }
-    
+    logLine("Wi-Fi attempt failed, status: " + getWiFiStatusString(WiFi.status()));
     return false;
 }
 
@@ -191,61 +102,45 @@ bool startMdns()
     return true;
 }
 
+// Single mDNS query per call (~1.3s worst case). The main loop paces retries
+// with its own backoff delay so this function doesn't need an inner retry
+// loop. The MDNS.end()+begin() reset stays — LEAmDNS leaves a broken receive
+// socket after a failed queryService(), so we tear it down on every attempt.
+// (ESPmDNS on the S3 does not have this bug; same pattern is unnecessary there.)
 bool discoverGateway()
 {
     const DeviceConfig& config = getDeviceConfig();
-    const int MAX_ATTEMPTS = 5;
-    const unsigned long RETRY_DELAY_MS = 3000UL;
 
-    for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
+    MDNS.end();
+    delay(100);
+    if (!MDNS.begin(config.clientId))
     {
-        logLine("mDNS discovery attempt " + String(attempt) +
-                "/" + String(MAX_ATTEMPTS));
+        logLine("mDNS restart failed");
+    }
+    delay(200);
 
-        // LEAmDNS leaves a broken receive socket after a failed queryService().
-        // end()+begin() tears it down and rebuilds clean.
-        // ESPmDNS (S3) does NOT need this fix.
-        MDNS.end();
-        delay(100);
-        if (!MDNS.begin(config.clientId))
+    int n = MDNS.queryService(MDNS_SERVICE_NAME, MDNS_SERVICE_PROTO);
+
+    if (n > 0)
+    {
+        IPAddress hostIp = MDNS.IP(0);
+        uint16_t  port   = MDNS.port(0);
+
+        if (hostIp)
         {
-            logLine("  mDNS restart failed on attempt " + String(attempt));
+            g_gatewayHost  = hostIp.toString();
+            g_gatewayPort  = (port != 0) ? port : GATEWAY_DEFAULT_PORT;
+            g_gatewayKnown = true;
+            logLine("Gateway discovered at http://" + g_gatewayHost + ":" + String(g_gatewayPort));
+            return true;
         }
-        delay(200);
-
-        int n = MDNS.queryService(MDNS_SERVICE_NAME, MDNS_SERVICE_PROTO);
-
-        if (n > 0)
-        {
-            IPAddress hostIp = MDNS.IP(0);
-            uint16_t  port   = MDNS.port(0);
-
-            if (hostIp)
-            {
-                g_gatewayHost  = hostIp.toString();
-                g_gatewayPort  = (port != 0) ? port : GATEWAY_DEFAULT_PORT;
-                g_gatewayKnown = true;
-                Serial.print("Gateway discovered at http://");
-                Serial.print(g_gatewayHost);
-                Serial.print(":");
-                Serial.println(g_gatewayPort);
-                return true;
-            }
-            logLine("  Result had no valid IP, retrying...");
-        }
-        else
-        {
-            logLine("  No response. Gateway may still be initializing.");
-        }
-
-        if (attempt < MAX_ATTEMPTS)
-        {
-            logLine("  Waiting 3s before next attempt...");
-            delay(RETRY_DELAY_MS);
-        }
+        logLine("mDNS result had no valid IP");
+    }
+    else
+    {
+        logLine("mDNS query returned no results; gateway may still be initializing");
     }
 
-    logLine("Gateway discovery failed after all attempts.");
     return false;
 }
 

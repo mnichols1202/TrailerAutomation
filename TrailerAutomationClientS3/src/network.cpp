@@ -35,6 +35,11 @@ static String getWiFiStatusString(int status)
     }
 }
 
+// Single non-blocking-ish WiFi attempt per call: ~5s worst case.
+// TX power is rotated across calls (low → medium → max → low → …) so the
+// "try harder over time" behavior is preserved without burning 60+ seconds
+// inside one function call. The main loop pages this every iteration; failure
+// just means "try again next time" with the next power level.
 bool ensureWifiConnected()
 {
     if (WiFi.status() == WL_CONNECTED)
@@ -42,161 +47,50 @@ bool ensureWifiConnected()
         return true;
     }
 
-    logLine("Wi-Fi not connected, attempting to connect...");
-
-    // Get WiFi credentials from config
     const DeviceConfig& config = getDeviceConfig();
-    
-    logLine("WiFi Configuration:");
-    logLine("  SSID: [" + String(config.wifiSSID) + "]");
-    logLine("  Password: [" + String(config.wifiPassword) + "]");
-    logLine("  SSID Length: " + String(strlen(config.wifiSSID)));
-    logLine("  Password Length: " + String(strlen(config.wifiPassword)));
-    
-    // Print MAC address for router whitelisting
-    uint8_t mac[6];
-    WiFi.macAddress(mac);
-    char macStr[18];
-    sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    logLine("  ESP32 MAC: " + String(macStr));
 
-    // Try multiple connection attempts with increasing power
-    for (int attempt = 1; attempt <= 3; attempt++)
+    // Rotate TX power across calls. Index persists between calls so each
+    // retry uses progressively more power. Reset to 0 (lowest) on success.
+    static uint8_t s_powerIdx = 0;
+    wifi_power_t powerLevels[3] = {
+        WIFI_POWER_11dBm,    // low — minimum interference, lowest current draw
+        WIFI_POWER_15dBm,    // medium
+        WIFI_POWER_19_5dBm   // max — try harder
+    };
+    const char* powerNames[3] = { "LOW (11dBm)", "MEDIUM (15dBm)", "MAX (19.5dBm)" };
+
+    logLine("Wi-Fi not connected, attempting (SSID: [" + String(config.wifiSSID) +
+            "], TX power: " + String(powerNames[s_powerIdx]) + ")");
+
+    // Make sure the driver is in STA mode. We don't toggle WIFI_OFF every
+    // call — that was 2 s of pure delay() per attempt.
+    WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true);
+    WiFi.setSleep(false);
+    WiFi.persistent(false);
+    WiFi.setTxPower(powerLevels[s_powerIdx]);
+
+    WiFi.begin(config.wifiSSID, config.wifiPassword);
+
+    const unsigned long timeoutMs = 5000UL;
+    const unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED && (millis() - start) < timeoutMs)
     {
-        logLine("Connection attempt " + String(attempt) + "/3...");
-        
-        // Properly disconnect and reset WiFi to clear any bad state
-        WiFi.disconnect(true);
-        delay(500);
-        WiFi.mode(WIFI_OFF);
-        delay(500);
-        
-        // Start fresh
-        WiFi.mode(WIFI_STA);
-        delay(1000);
-        
-        // Configure WiFi settings for stability
-        WiFi.setAutoReconnect(true);
-        WiFi.setSleep(false);
-        WiFi.persistent(false);  // Don't save WiFi config to flash
-        
-        // Start with lowest power and increase if connection fails
-        // Lower power = more stable, less interference, less current draw
-        if (attempt == 1)
-        {
-            WiFi.setTxPower(WIFI_POWER_11dBm);  // Low power
-            logLine("  Using LOW power (11dBm) for maximum stability");
-        }
-        else if (attempt == 2)
-        {
-            WiFi.setTxPower(WIFI_POWER_15dBm);  // Medium power
-            logLine("  Using MEDIUM power (15dBm)");
-        }
-        else
-        {
-            WiFi.setTxPower(WIFI_POWER_19_5dBm);  // Max power
-            logLine("  Using MAX power (19.5dBm)");
-        }
-        
-        // Set DNS servers
-        WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, IPAddress(8,8,8,8), IPAddress(8,8,4,4));
-        
-        // Begin connection
-        WiFi.begin(config.wifiSSID, config.wifiPassword);
-        
-        const unsigned long start = millis();
-        const unsigned long timeoutMs = 20000UL;  // 20s timeout
-        int lastStatus = -1;
-
-        while (WiFi.status() != WL_CONNECTED && (millis() - start) < timeoutMs)
-        {
-            delay(500);
-#if DEBUG_LOGGING
-            Serial.print(".");
-#endif
-            
-            // Log status changes
-            int currentStatus = WiFi.status();
-            if (currentStatus != lastStatus)
-            {
-#if DEBUG_LOGGING
-                Serial.println();
-#endif
-                logLine("  Status changed to: " + String(currentStatus) + " [" + getWiFiStatusString(currentStatus) + "]");
-                lastStatus = currentStatus;
-            }
-        }
-        Serial.println();
-        
-        if (WiFi.status() == WL_CONNECTED)
-        {
-            logLine("✅ Wi-Fi connected successfully on attempt " + String(attempt));
-            Serial.print("  IP address: ");
-            Serial.println(WiFi.localIP());
-            Serial.print("  Gateway: ");
-            Serial.println(WiFi.gatewayIP());
-            Serial.print("  DNS: ");
-            Serial.println(WiFi.dnsIP());
-            Serial.print("  RSSI: ");
-            Serial.print(WiFi.RSSI());
-            Serial.println(" dBm");
-            
-            g_lastWifiError = 0;
-            return true;
-        }
-        
-        logLine("❌ Attempt " + String(attempt) + " failed with status: " + getWiFiStatusString(WiFi.status()));
-        
-        if (attempt < 3)
-        {
-            delay(2000);  // Wait before next attempt
-        }
+        delay(100);
     }
-    
-    // All attempts failed
-    g_lastWifiError = WiFi.status();
-    logLine("ERROR: All WiFi connection attempts failed!");
 
     if (WiFi.status() == WL_CONNECTED)
     {
-        logLine("Wi-Fi connected.");
-        Serial.print("  IP address: ");
-        Serial.println(WiFi.localIP());
-        Serial.print("  Gateway: ");
-        Serial.println(WiFi.gatewayIP());
-        Serial.print("  DNS: ");
-        Serial.println(WiFi.dnsIP());
-        Serial.print("  RSSI: ");
-        Serial.print(WiFi.RSSI());
-        Serial.println(" dBm");
-        
-        // Test if we can actually reach the gateway
-        delay(100);
-        
-        g_lastWifiError = 0;  // Clear error
+        logLine("Wi-Fi connected. IP=" + WiFi.localIP().toString() +
+                " RSSI=" + String(WiFi.RSSI()) + " dBm");
+        g_lastWifiError = 0;
+        s_powerIdx = 0;   // back to lowest power for the next outage
         return true;
     }
 
-    // Capture the specific WiFi error status
     g_lastWifiError = WiFi.status();
-    
-    // Log specific error
-    switch (WiFi.status())
-    {
-        case WL_NO_SSID_AVAIL:
-            logLine("Wi-Fi error: SSID not found");
-            break;
-        case WL_CONNECT_FAILED:
-            logLine("Wi-Fi error: Connection failed (wrong password?)");
-            break;
-        case WL_DISCONNECTED:
-            logLine("Wi-Fi error: Disconnected");
-            break;
-        default:
-            logLine(String("Wi-Fi connection timeout. Status: ") + String(WiFi.status()));
-            break;
-    }
-    
+    logLine("Wi-Fi attempt failed, status: " + getWiFiStatusString(WiFi.status()));
+    s_powerIdx = (s_powerIdx + 1) % 3;   // try a different power next time
     return false;
 }
 

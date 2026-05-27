@@ -93,7 +93,18 @@ void setup()
     {
         logLine("WARNING: Button initialization failed");
     }
-    
+
+    // Spawn a FreeRTOS task pinned to core 1 that polls the buttons forever.
+    // This guarantees button presses actuate their relays even when core 0
+    // is blocked for tens of seconds inside ensureWifiConnected() or
+    // discoverGateway() during a network outage. Button handlers do the
+    // local relay digitalWrite immediately and hand off HTTP notifications
+    // to core 0 via a lock-free queue (drainPendingNotifications).
+    if (!startButtonTask())
+    {
+        logLine("WARNING: Failed to start button polling task on core 1");
+    }
+
     // Note: WiFi connection will happen in loop() after boot delay
 }
 
@@ -102,8 +113,10 @@ void loop()
     // Update LED animation
     updateLed();
 
-    // Always service buttons regardless of network state
-    checkButtons();
+    // Button polling runs on a FreeRTOS task pinned to core 1. On core 0,
+    // we just drain any notifications it queued so the gateway sees state
+    // changes when the network is available.
+    drainPendingNotifications();
 
     // Check if boot delay is complete
     if (!g_bootDelayComplete)

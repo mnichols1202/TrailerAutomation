@@ -46,6 +46,7 @@ bool sendHeartbeat(bool wasRegistered)
     HTTPClient http;
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
+    http.setTimeout(3000);  // cap blocking time on a dead/slow gateway
 
     int httpCode = http.POST(reinterpret_cast<uint8_t*>(const_cast<char*>(payload.c_str())), payload.length());
 
@@ -111,6 +112,7 @@ bool sendHeartbeat(bool wasRegistered)
             HTTPClient httpSync;
             httpSync.begin(url);
             httpSync.addHeader("Content-Type", "application/json");
+            httpSync.setTimeout(3000);
             httpSync.POST(reinterpret_cast<uint8_t*>(const_cast<char*>(syncPayload.c_str())), syncPayload.length());
             httpSync.end();
             
