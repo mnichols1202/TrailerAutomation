@@ -45,14 +45,20 @@ SCL       ->     GP5 (Pin 7)
 - **Red blinks**: Network/Gateway errors (count = error #)
 
 ## Building & Uploading
-1. Edit `data/config.json` with your WiFi credentials
-2. Build: `pio run`
-3. Upload firmware: Hold BOOTSEL, connect USB, `pio run --target upload`
-4. Upload config: `pio run --target uploadfs`
-5. Monitor: `pio device monitor` (115200 baud)
+> ⚠️ **Pico is one-pass flash only.** Firmware and the LittleFS config partition share the
+> same flash address space, so flashing firmware alone (or `uploadfs` alone) wipes
+> `config.json`. Always build and flash the **unified** image (firmware + LittleFS combined).
+> Never run `--target uploadfs` or a firmware-only build on a Pico.
+
+1. Edit `data/config.json` with your WiFi credentials (must exist before building)
+2. Build the unified image: `pio run -e pico2w --target buildunified`
+3. Flash it: hold BOOTSEL, connect USB, then `pio run -e pico2w --target upload`
+   (this flashes the combined image built in step 2, not firmware alone)
+4. Monitor: `pio device monitor` (115200 baud)
 
 ## Key Differences from ESP32-S3
-- Uses LittleFS instead of SD card
+- One-pass flash only: firmware + LittleFS share flash space, so use the unified
+  `buildunified` image (the S3 flashes firmware and filesystem in two independent passes)
 - WiFi uses progressive timeout delays (15s/20s/30s) instead of power levels
 - I2C explicitly configured for GP4/GP5
 - Uses LEAmDNS library for mDNS

@@ -146,14 +146,16 @@ board_build.psram_type = opi
 - Same 4-relay USB power limit
 
 ### Build Environments
+> ⚠️ **One-pass flash only** — never run `uploadfs` or a firmware-only build on a Pico;
+> it wipes `config.json`. Build the unified (firmware + LittleFS) image, then flash it.
 ```bash
 # Pico W (RP2040)
-pio run -e picow -t upload
-pio run -e picow -t uploadfs
+pio run -e picow --target buildunified   # build combined image
+pio run -e picow --target upload         # flash the unified image
 
 # Pico 2W (RP2350)
-pio run -e pico2w -t upload
-pio run -e pico2w -t uploadfs
+pio run -e pico2w --target buildunified
+pio run -e pico2w --target upload
 ```
 
 ### Key Files
@@ -383,7 +385,7 @@ cd TrailerAutomationClientPico
 pio run -e picow -t buildunified  # FW+FS in one .uf2
 # Pico 2W:
 pio run -e pico2w -t buildunified
-# Drag .pio/build/{env}/firmware-unified.uf2 to RPI-RP2 drive
+# Drag .pio/build/{env}/firmware_with_fs.uf2 to RPI-RP2 drive
 ```
 
 ---
@@ -493,8 +495,8 @@ _To be discussed - ready for more complex functionality_
 ### Build Artifacts
 - Gateway: `bin/Release/net9.0/linux-arm64/publish/`
 - .NET Client: `bin/Release/net9.0/linux-arm64/publish/`
-- ESP32-S3: `.pio/build/trailer_automation_client_s3/firmware.uf2`
-- Pico: `.pio/build/picow/firmware-unified.uf2`
+- ESP32-S3: `.pio/build/trailer_automation_client_s3/firmware.bin`
+- Pico: `.pio/build/picow/firmware_with_fs.uf2`
 
 ---
 

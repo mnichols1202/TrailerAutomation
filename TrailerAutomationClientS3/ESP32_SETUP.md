@@ -2,57 +2,42 @@
 
 ## What Was Added
 
-✅ **SD Card Configuration** - Load config.json from SD card  
+✅ **LittleFS Configuration** - Load config.json from internal flash (LittleFS)  
 ✅ **Device Registration** - Register with Gateway including relay info  
 ✅ **TCP Command Listener** - Receive commands from Gateway  
 ✅ **GPIO Relay Control** - Control actual GPIO pins  
-✅ **Dynamic Configuration** - All settings from SD card  
+✅ **Dynamic Configuration** - All settings from config.json on LittleFS  
 
 ## Hardware Setup
 
-### 1. SD Card Module Wiring
+> **Note:** The S3 stores `config.json` in internal flash via **LittleFS** — no SD card
+> module or SPI wiring is required.
 
-```
-SD Module Pin → ESP32-S3 Pin
-────────────────────────────
-VCC  → 3.3V
-GND  → GND
-MOSI → GPIO 11
-MISO → GPIO 13
-SCK  → GPIO 12
-CS   → GPIO 10
-```
-
-**Important:**
-- Use **3.3V**, NOT 5V!
-- Module has built-in level shifters
-- Double-check wiring before powering on
-
-### 2. Relay Wiring (Optional)
+### 1. Relay Wiring (Optional)
 
 If using relays, connect to GPIOs specified in config.json:
 - Default: GPIO 4 and GPIO 5
 - Can be any available GPIO pins
 
-### 3. SHT31 Sensor (Already configured)
+### 2. SHT31 Sensor (Already configured)
 
 I2C on standard ESP32-S3 pins
 
-## SD Card Setup
+## Config Setup (LittleFS)
 
-### 1. Format SD Card
+### 1. Edit config.json
 
-- Format as **FAT32**
-- Use SD card <= 32GB (FAT32 limit)
-
-### 2. Create config.json
-
-Copy `config.json.template` to SD card root as `config.json`
+Edit `data/config.json` (copy from `data/config.json.template` if starting fresh). It is
+uploaded to the S3's internal flash with `pio run --target uploadfs` (see below).
 
 **Edit to match your setup:**
 
 ```json
 {
+  "WiFi": {
+    "SSID": "YourNetworkName",          ← 2.4GHz network only
+    "Password": "YourPassword"
+  },
   "Device": {
     "DeviceId": "esp32-s3-001",        ← Change this!
     "ClientId": "esp32-s3-001",         ← Match DeviceId
@@ -101,28 +86,24 @@ Copy `config.json.template` to SD card root as `config.json`
 "Enabled": false
 ```
 
-### 3. Insert SD Card
-
-- Insert SD card into module
-- Power off ESP32-S3 first!
-
 ## Software Setup
 
-### 1. Update WiFi Credentials
+### 1. WiFi Credentials
 
-Edit `src/config.h`:
-```cpp
-#define WIFI_SSID     "YourNetworkName"
-#define WIFI_PASSWORD "YourPassword"
-```
+WiFi credentials live in the `WiFi` section of `data/config.json` (shown above) — **not**
+in `src/config.h`. Edit them there before uploading the filesystem.
 
 ### 2. Build and Upload
 
+The S3 supports two-pass flashing (order doesn't matter, config persists across firmware
+updates):
+
 ```bash
-pio run --target upload
+pio run --target uploadfs    # upload config.json to LittleFS
+pio run --target upload      # upload firmware
 ```
 
-Or use PlatformIO IDE Upload button.
+Or use the PlatformIO IDE "Upload Filesystem Image" and "Upload" buttons.
 
 ### 3. Monitor Serial Output
 
@@ -133,8 +114,8 @@ pio device monitor
 Watch for:
 ```
 TrailerAutomationClientS3 starting...
-Initializing SD card...
-SD card initialized successfully
+Initializing LittleFS...
+LittleFS initialized successfully
 Reading config.json...
 Configuration loaded successfully:
   DeviceId: esp32-s3-001
@@ -147,7 +128,7 @@ Configuration loaded successfully:
 
 ```
 1. TrailerAutomationClientS3 starting...
-2. SD card initialization
+2. LittleFS mount
 3. Config.json loaded
 4. Relay controller initialized
 5. 15-second boot delay (battery-safe)
@@ -191,18 +172,15 @@ Relay [relay1] Relay 1 on pin 4 -> ON
 
 ## Troubleshooting
 
-### SD Card Errors
+### Filesystem / Config Errors
 
-**"SD card initialization failed"**
-- Check wiring (especially CS pin)
-- Verify 3.3V power
-- Try different SD card
-- Format as FAT32
+**"LittleFS mount failed"**
+- Re-upload the filesystem: `pio run --target uploadfs`
+- Confirm `board_build.filesystem = littlefs` in `platformio.ini`
 
 **"Failed to open /config.json"**
+- Make sure `data/config.json` exists, then run `pio run --target uploadfs`
 - File must be named exactly `config.json`
-- Must be in root directory (not in folder)
-- Check file wasn't saved as `config.json.txt`
 
 **"Failed to parse config.json"**
 - Validate JSON syntax at jsonlint.com
@@ -212,7 +190,7 @@ Relay [relay1] Relay 1 on pin 4 -> ON
 ### WiFi/Gateway Issues
 
 **"Wi-Fi connection timeout"**
-- Check SSID/password in config.h
+- Check SSID/password in the `WiFi` section of `data/config.json` (re-run `uploadfs` after editing)
 - Ensure 2.4GHz network (ESP32 doesn't support 5GHz)
 
 **"Gateway not known"**
@@ -249,12 +227,6 @@ Relay [relay1] Relay 1 on pin 4 -> ON
 - GPIO 0: Boot button (don't use)
 - GPIO 19, 20: USB (don't use)
 - GPIO 43, 44: UART0/Console (don't use)
-
-### SD Card (SPI)
-- GPIO 10: CS
-- GPIO 11: MOSI
-- GPIO 12: SCK
-- GPIO 13: MISO
 
 ### I2C (SHT31 Sensor)
 - GPIO 8: SDA (default)
