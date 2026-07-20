@@ -48,6 +48,7 @@
         "Id": "button1",
         "Name": "Water Heater Button",
         "Pin": 0,
+        "LedPin": 10,
         "TargetDevice": "PicoW-001",
         "TargetRelay": "1",
         "Enabled": true
@@ -56,6 +57,7 @@
         "Id": "button2",
         "Name": "Water Pump Button",
         "Pin": 1,
+        "LedPin": 11,
         "TargetDevice": "PicoW-001",
         "TargetRelay": "2",
         "Enabled": true
@@ -64,6 +66,7 @@
         "Id": "button3",
         "Name": "Exterior Lights Button",
         "Pin": 2,
+        "LedPin": 12,
         "TargetDevice": "PicoW-001",
         "TargetRelay": "3",
         "Enabled": true
@@ -72,6 +75,7 @@
         "Id": "button4",
         "Name": "Interior Lights Button",
         "Pin": 3,
+        "LedPin": 13,
         "TargetDevice": "PicoW-001",
         "TargetRelay": "4",
         "Enabled": true

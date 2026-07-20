@@ -166,7 +166,8 @@ bool initFsConfig()
             strncpy(b.targetDevice, button["TargetDevice"] | "", MAX_DEVICE_ID_LEN - 1);
             strncpy(b.targetRelay, button["TargetRelay"] | "", MAX_RELAY_ID_LEN - 1);
             b.enabled = button["Enabled"] | false;
-            
+            b.ledPin = button["LedPin"] | -1;  // optional indicator LED; -1 = none
+
             if (b.pin >= 0 && strlen(b.targetDevice) > 0 && strlen(b.targetRelay) > 0 && b.enabled)
             {
                 g_deviceConfig.buttonCount++;
@@ -215,8 +216,9 @@ bool initFsConfig()
     for (int i = 0; i < g_deviceConfig.buttonCount; i++)
     {
         ButtonConfig& b = g_deviceConfig.buttons[i];
-        logLine("    [" + String(b.id) + "] " + String(b.name) + 
-                " - Pin:" + String(b.pin) + 
+        logLine("    [" + String(b.id) + "] " + String(b.name) +
+                " - Pin:" + String(b.pin) +
+                " LED:" + (b.ledPin >= 0 ? String(b.ledPin) : String("none")) +
                 " Target:" + String(b.targetDevice) + ":" + String(b.targetRelay));
     }
     

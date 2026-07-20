@@ -28,6 +28,7 @@ struct ButtonConfig
     char targetDevice[MAX_DEVICE_ID_LEN];
     char targetRelay[MAX_RELAY_ID_LEN];
     bool enabled;
+    int ledPin;  // GPIO driving the button's indicator LED (low-side FET gate); -1 = none
 };
 
 // Relay configuration structure

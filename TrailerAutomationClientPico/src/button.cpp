@@ -16,6 +16,7 @@
 struct ButtonState
 {
     int pin;
+    int ledPin;              // indicator LED GPIO (low-side FET gate); -1 = none
     bool lastValue;          // raw reading, for debounce detection
     bool lastStableValue;    // post-debounce stable reading
     unsigned long lastDebounceTime;
@@ -29,6 +30,19 @@ static int g_buttonCount = 0;
 static bool g_buttonsInitialized = false;
 
 #define DEBOUNCE_DELAY_MS 50
+
+// Drive a button's indicator LED to match its mirrored relay state.
+// GPIO → low-side N-FET gate: HIGH = LED on. No-op if the button has no LED.
+// Called from both cores (core 1 on press, core 0 on web-command sync); a
+// digitalWrite is a single atomic SIO write and the state always converges to
+// relayState, so no lock is needed for an indicator LED.
+static void updateButtonLed(const ButtonState& b)
+{
+    if (b.ledPin >= 0)
+    {
+        digitalWrite(b.ledPin, b.relayState ? HIGH : LOW);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Cross-core SPSC notification queue
@@ -121,11 +135,17 @@ bool initButtons()
         pinMode(btn.pin, INPUT_PULLUP);
 
         g_buttonStates[i].pin = btn.pin;
+        g_buttonStates[i].ledPin = btn.ledPin;
         g_buttonStates[i].lastValue = HIGH;
         g_buttonStates[i].lastStableValue = HIGH;
         g_buttonStates[i].lastDebounceTime = 0;
         strncpy(g_buttonStates[i].targetDevice, btn.targetDevice, MAX_DEVICE_ID_LEN - 1);
         strncpy(g_buttonStates[i].targetRelay, btn.targetRelay, MAX_RELAY_ID_LEN - 1);
+
+        if (btn.ledPin >= 0)
+        {
+            pinMode(btn.ledPin, OUTPUT);
+        }
 
         bool actualState = false;
         if (strcmp(btn.targetDevice, config.clientId) == 0)
@@ -133,8 +153,10 @@ bool initButtons()
             getRelayState(btn.targetRelay, &actualState);
         }
         g_buttonStates[i].relayState = actualState;
+        updateButtonLed(g_buttonStates[i]);  // drive LED to the relay's boot state
 
         logLine("Button '" + String(btn.name) + "' initialized on pin " + String(btn.pin) +
+                " (LED " + (btn.ledPin >= 0 ? String(btn.ledPin) : String("none")) + ")" +
                 " -> " + String(btn.targetDevice) + ":" + String(btn.targetRelay));
     }
 
@@ -151,6 +173,7 @@ static void handleLocalToggle(ButtonState* btnState)
     if (setRelayState(btnState->targetRelay, newState))
     {
         btnState->relayState = newState;
+        updateButtonLed(*btnState);  // follow the relay we just toggled
         logLine("[Button] Set local relay '" + String(btnState->targetRelay) + "' to " + (newState ? "ON" : "OFF"));
 
         // Light is already in the right state. Hand off the gateway notification
@@ -248,6 +271,7 @@ void syncButtonRelayState(const char* relayId, bool state)
         if (strcmp(btnState.targetRelay, relayId) == 0)
         {
             btnState.relayState = state;
+            updateButtonLed(btnState);  // follow web/gateway-driven relay change
             logLine("[Button] Synced button state for relay '" + String(relayId) + "' to " + (state ? "ON" : "OFF"));
         }
     }
