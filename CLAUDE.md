@@ -4,6 +4,10 @@ RV trailer electrical automation system. .NET 9 / Blazor Server gateway on a Ras
 two ESP32/Pico firmware clients, and a .NET client node.
 GitHub: https://github.com/mnichols1202/TrailerAutomation
 
+> **Working on the 4-relay controller hardware rebuild?** Read `docs/hardware/HANDOFF.md`
+> first, then `docs/hardware/REDESIGN_NOTES.md`. They carry the design decisions, settled
+> questions, and known dead ends from earlier sessions.
+
 ---
 
 ## How to Work in This Repo
