@@ -1,0 +1,217 @@
+<title>Trailer Controller — Parts List &amp; Build Reference</title>
+<style>
+  :root{
+    --bg:#0e1413; --panel:#151e1c; --panel-2:#1a2523; --line:#26332f; --line-soft:#1f2b28;
+    --ink:#e8efec; --ink-dim:#a2b2ad; --ink-faint:#6d7e79;
+    --copper:#d98247; --copper-hi:#f0a869;
+    --v12:#e56a4a; --v5:#e7a948; --v33:#46b39a; --gpio:#6aa9e0; --gnd:#8a9895;
+    --have:#57c98a; --buy:#e7a948; --opt:#8a9895;
+    --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --maxw:72rem;
+  }
+  @media (prefers-color-scheme:light){:root{
+    --bg:#eaeeec;--panel:#f7faf8;--panel-2:#eef3f0;--line:#d3ddd9;--line-soft:#e0e8e4;
+    --ink:#14201d;--ink-dim:#4a5a56;--ink-faint:#7c8a86;--copper:#b5652a;--copper-hi:#c9793c;
+    --v12:#c9502f;--v5:#a9781f;--v33:#2b8a74;--gpio:#3f7bb8;--gnd:#68766f;
+    --have:#2f9c64;--buy:#a9781f;--opt:#68766f;
+  }}
+  :root[data-theme="dark"]{--bg:#0e1413;--panel:#151e1c;--panel-2:#1a2523;--line:#26332f;--line-soft:#1f2b28;--ink:#e8efec;--ink-dim:#a2b2ad;--ink-faint:#6d7e79;--copper:#d98247;--v12:#e56a4a;--v5:#e7a948;--v33:#46b39a;--gpio:#6aa9e0;--gnd:#8a9895;--have:#57c98a;--buy:#e7a948;--opt:#8a9895;}
+  :root[data-theme="light"]{--bg:#eaeeec;--panel:#f7faf8;--panel-2:#eef3f0;--line:#d3ddd9;--line-soft:#e0e8e4;--ink:#14201d;--ink-dim:#4a5a56;--ink-faint:#7c8a86;--copper:#b5652a;--v12:#c9502f;--v5:#a9781f;--v33:#2b8a74;--gpio:#3f7bb8;--gnd:#68766f;--have:#2f9c64;--buy:#a9781f;--opt:#68766f;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15.5px;}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 1.3rem;}
+  h1,h2{text-wrap:balance;line-height:1.15;margin:0;}
+  .mono{font-family:var(--mono);}
+  code{font-family:var(--mono);font-size:.85em;background:var(--panel-2);border:1px solid var(--line-soft);padding:.05em .38em;border-radius:5px;}
+  :focus-visible{outline:2px solid var(--copper);outline-offset:2px;border-radius:3px;}
+
+  header.hero{border-bottom:1px solid var(--line);}
+  .hero-in{padding:2.6rem 0 1.9rem;}
+  .eyebrow{font-family:var(--mono);font-size:.73rem;letter-spacing:.2em;text-transform:uppercase;color:var(--copper);display:flex;align-items:center;gap:.7rem;margin-bottom:1rem;}
+  .eyebrow::before{content:"";width:1.6rem;height:2px;background:var(--copper);}
+  .hero h1{font-size:clamp(1.7rem,4vw,2.5rem);font-weight:680;letter-spacing:-.015em;}
+  .hero .lede{margin-top:.8rem;max-width:54ch;color:var(--ink-dim);}
+
+  section{padding:2.4rem 0;border-bottom:1px solid var(--line-soft);}
+  .sec-head{display:flex;align-items:baseline;gap:.9rem;margin-bottom:1.1rem;flex-wrap:wrap;}
+  .sec-head h2{font-size:1.3rem;font-weight:640;letter-spacing:-.01em;}
+  .sec-lead{color:var(--ink-dim);max-width:64ch;margin:-.3rem 0 1.3rem;font-size:.93rem;}
+
+  .toolbar{display:flex;gap:.7rem;align-items:center;margin:.3rem 0 1.1rem;font-size:.82rem;color:var(--ink-faint);font-family:var(--mono);flex-wrap:wrap;}
+  .toolbar button{font-family:var(--mono);font-size:.76rem;color:var(--ink-dim);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:.3rem .6rem;cursor:pointer;}
+  .toolbar button:hover{color:var(--ink);border-color:var(--copper);}
+  #prog b{color:var(--have);}
+
+  .scroller{overflow-x:auto;}
+  table{border-collapse:collapse;width:100%;font-size:.87rem;min-width:40rem;}
+  thead th{text-align:left;font-family:var(--mono);font-size:.68rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);padding:.5rem .7rem;border-bottom:1px solid var(--line);font-weight:600;}
+  tbody td{padding:.55rem .7rem;border-bottom:1px solid var(--line-soft);vertical-align:middle;}
+  tbody tr:hover{background:color-mix(in srgb,var(--copper) 5%,transparent);}
+  .grp td{background:var(--panel-2);font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--copper);border-bottom:1px solid var(--line);padding:.45rem .7rem;}
+  .ck{width:1.7rem;text-align:center;}
+  input[type=checkbox]{width:1.15rem;height:1.15rem;accent-color:var(--have);cursor:pointer;}
+  .part{font-weight:600;color:var(--ink);}
+  .qty{font-family:var(--mono);color:var(--ink-dim);white-space:nowrap;}
+  .why{color:var(--ink-faint);font-size:.85rem;}
+  .st{font-family:var(--mono);font-size:.68rem;padding:.14rem .5rem;border-radius:20px;white-space:nowrap;border:1px solid var(--line);}
+  .st.have{color:var(--have);border-color:color-mix(in srgb,var(--have) 45%,var(--line));}
+  .st.buy{color:var(--buy);border-color:color-mix(in srgb,var(--buy) 45%,var(--line));}
+  .st.opt{color:var(--opt);border-color:var(--line);}
+
+  .callout{border:1px solid color-mix(in srgb,var(--buy) 42%,var(--line));background:color-mix(in srgb,var(--buy) 8%,var(--panel));border-radius:10px;padding:.95rem 1.15rem;margin-top:1.3rem;font-size:.9rem;color:var(--ink-dim);}
+  .callout b{color:var(--buy);}
+  .callout ul{margin:.5rem 0 0;padding-left:1.1rem;} .callout li{margin:.25rem 0;}
+
+  /* power tree */
+  .flow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:1.3rem;}
+  .node{font-family:var(--mono);font-size:.8rem;padding:.5rem .75rem;border:1px solid var(--line);border-radius:7px;background:var(--panel);white-space:nowrap;}
+  .node b{color:var(--copper);}
+  .arrow{color:var(--ink-faint);}
+  .rails{display:flex;flex-direction:column;gap:.6rem;min-width:32rem;}
+  .rail{display:grid;grid-template-columns:8.5rem 1fr;}
+  .rail .tag{font-family:var(--mono);font-size:.8rem;font-weight:600;display:flex;align-items:center;gap:.5rem;padding:.55rem .8rem;border-radius:7px 0 0 7px;border:1px solid var(--line);border-right:none;background:var(--panel-2);}
+  .rail .tag .sp{width:.5rem;height:1.1rem;border-radius:2px;}
+  .rail .load{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;padding:.5rem .8rem;border:1px solid var(--line);border-radius:0 7px 7px 0;background:var(--panel);}
+  .chip{font-family:var(--mono);font-size:.75rem;color:var(--ink-dim);padding:.2rem .5rem;border:1px solid var(--line-soft);border-radius:5px;background:var(--bg);white-space:nowrap;}
+  .v5 .sp{background:var(--v5)} .v5 .tag{color:var(--v5)}
+  .v33 .sp{background:var(--v33)} .v33 .tag{color:var(--v33)}
+  .gp .sp{background:var(--gpio)} .gp .tag{color:var(--gpio)}
+  .gd .sp{background:var(--gnd)} .gd .tag{color:var(--gnd)}
+
+  td .pin{font-family:var(--mono);color:var(--copper);font-weight:600;}
+  .link{color:var(--copper);}
+  footer{padding:2rem 0 3rem;color:var(--ink-faint);font-size:.8rem;}
+</style>
+
+<header class="hero">
+  <div class="wrap hero-in">
+    <div class="eyebrow">Parts List &amp; Build Reference · current</div>
+    <h1>Trailer Controller — every part, ticked off.</h1>
+    <p class="lede">The up-to-date build: two MP1584 bucks (no AMS1117), 2N2222 LED drivers, an XT30 + P-FET + TVS front end, on a 30×70 perfboard. Check off what you have — anything still <span style="color:var(--buy)">amber</span> is what's left to order.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- PARTS LIST -->
+  <section>
+    <div class="sec-head"><h2>Parts list</h2></div>
+    <p class="sec-lead">Tick the box once you have a part in hand. Saved in your browser. <span class="st have" style="margin:0 .2rem;">have</span> = you already own it · <span class="st buy" style="margin:0 .2rem;">buy</span> = order it · <span class="st opt" style="margin:0 .2rem;">optional</span> = only if you want it.</p>
+    <div class="toolbar"><span id="prog">0 / 0 in hand</span><button type="button" id="reset">reset</button></div>
+
+    <div class="scroller">
+      <table id="parts">
+        <thead><tr><th class="ck"></th><th>Part</th><th>Qty</th><th>What it's for</th><th>Status</th></tr></thead>
+        <tbody>
+
+          <tr class="grp"><td colspan="5">12 V front-end (protection)</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">XT30 connector pair</td><td class="qty">1</td><td class="why">Keyed power input — can't plug in backward</td><td><span class="st buy">buy</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">Inline fuse holder + 3 A fuse</td><td class="qty">1</td><td class="why">Over-current protection (BOJACK inline)</td><td><span class="st buy">buy</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">IRF9540N P-MOSFET</td><td class="qty">1</td><td class="why">Reverse-polarity protection (TO-220)</td><td><span class="st buy">buy</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">100 kΩ resistor ¼W</td><td class="qty">1</td><td class="why">P-FET gate pull-down</td><td><span class="st have">have</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">Zener BZX55C12 (12 V)</td><td class="qty">1</td><td class="why">P-FET gate spike clamp (from your drawer)</td><td><span class="st have">have</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">TVS 1.5KE18A</td><td class="qty">1</td><td class="why">Line surge clamp (20-pack ordered)</td><td><span class="st buy">buy</span></td></tr>
+
+          <tr class="grp"><td colspan="5">Power</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">MP1584 buck</td><td class="qty">2</td><td class="why">One set to <b>5.0 V</b>, one to <b>3.5 V</b> — from your 12-pack</td><td><span class="st have">have</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">Bulk cap 1000 µF / 25 V</td><td class="qty">1</td><td class="why">Steadies the 5 V rail on relay switching</td><td><span class="st buy">buy</span></td></tr>
+
+          <tr class="grp"><td colspan="5">Relays</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">Relay module JQC3F-03VDC</td><td class="qty">4</td><td class="why">3 V-coil, opto-isolated. Jumper stays ON, VCC ← 3.5 V</td><td><span class="st have">have</span></td></tr>
+
+          <tr class="grp"><td colspan="5">Buttons &amp; LED drivers</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">STARELO 12 mm LED button</td><td class="qty">4</td><td class="why">Momentary + built-in LED (4 wires each)</td><td><span class="st have">have</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">2N2222 NPN transistor</td><td class="qty">4</td><td class="why">Low-side switch for each button LED (you have 150+)</td><td><span class="st have">have</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">1 kΩ resistor ¼W</td><td class="qty">4</td><td class="why">2N2222 base resistor — one per LED driver</td><td><span class="st buy">buy</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">10 kΩ resistor ¼W</td><td class="qty">4</td><td class="why">Base pull-down (keeps LEDs off at boot)</td><td><span class="st opt">optional</span></td></tr>
+
+          <tr class="grp"><td colspan="5">Cooling</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">30 mm fan, 5 V 0.12 A</td><td class="qty">1</td><td class="why">Lid exhaust — runs off the 5 V rail</td><td><span class="st have">have</span></td></tr>
+
+          <tr class="grp"><td colspan="5">Status light (optional)</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">RGB LED, common anode</td><td class="qty">1</td><td class="why">Boot / WiFi / gateway status indicator</td><td><span class="st opt">optional</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">220 Ω resistor ¼W</td><td class="qty">3</td><td class="why">R/G/B current limit for the status LED</td><td><span class="st opt">optional</span></td></tr>
+
+          <tr class="grp"><td colspan="5">Wiring &amp; connectors</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">JST-XH connectors</td><td class="qty">~6</td><td class="why">4-pin per button + inter-deck (4-pin power, 8-pin signal)</td><td><span class="st have">have</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">Hookup wire — 22 AWG (signal) + 20 AWG (power)</td><td class="qty">—</td><td class="why">A few colors of each</td><td><span class="st buy">buy</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">Wago 221 / screw terminals</td><td class="qty">few</td><td class="why">No-solder joins for field wires (loads, 12 V in)</td><td><span class="st opt">optional</span></td></tr>
+
+          <tr class="grp"><td colspan="5">Board &amp; mounting</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">Perfboard 30 × 70 mm</td><td class="qty">1+</td><td class="why">Front-end + power section; fits the 37 mm shelf</td><td><span class="st have">have</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">Standoffs/screws or printed pockets</td><td class="qty">—</td><td class="why">Hold the boards to the deck</td><td><span class="st opt">optional</span></td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="part">Heat-shrink + zip ties</td><td class="qty">—</td><td class="why">Insulation + strain relief at wire entries</td><td><span class="st buy">buy</span></td></tr>
+
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>Small parts people forget</b> — these are the ones most likely to be your missing order:
+      <ul>
+        <li><b>Bulk cap 1000 µF</b> — easy to overlook, but the 5 V rail wants it</li>
+        <li><b>1 kΩ base resistors ×4</b> — the 2N2222 LED drivers don't work without them</li>
+        <li><b>Hookup wire</b> — especially the heavier 20 AWG for the 12 V feed</li>
+        <li>The <b>3 A fuse</b> itself (if your holder didn't include the right value)</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- POWER TREE -->
+  <section>
+    <div class="sec-head"><h2>Power tree (current — two bucks)</h2></div>
+    <p class="sec-lead">The AMS1117 is gone. Two MP1584 bucks off the protected 12 V — one makes 5 V, one makes 3.5 V — so everything runs cool.</p>
+    <div class="scroller">
+      <div style="min-width:34rem;">
+        <div class="flow">
+          <span class="node"><b>12 V</b> trailer</span><span class="arrow">→</span>
+          <span class="node">XT30 · fuse · <b>P-FET</b> · TVS</span><span class="arrow">→</span>
+          <span class="node">protected 12 V</span><span class="arrow">→</span>
+          <span class="node"><b>Buck A</b> → 5.0 V</span>
+          <span class="node"><b>Buck B</b> → 3.5 V</span>
+        </div>
+        <div class="rails">
+          <div class="rail v5"><div class="tag"><span class="sp"></span>5 V RAIL</div><div class="load"><span class="chip">Pico VSYS (pin 39)</span><span class="chip">button LEDs</span><span class="chip">fan</span><span class="chip">bulk cap</span></div></div>
+          <div class="rail v33"><div class="tag"><span class="sp"></span>3.5 V RAIL</div><div class="load"><span class="chip">relay VCC ×4 (jumper ON)</span></div></div>
+          <div class="rail gp"><div class="tag"><span class="sp"></span>GPIO 3.3 V</div><div class="load"><span class="chip">relay IN ×4</span><span class="chip">button switches ×4</span><span class="chip">LED-transistor bases ×4</span></div></div>
+          <div class="rail gd"><div class="tag"><span class="sp"></span>GND</div><div class="load"><span class="chip">common — star point at the 12 V input</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PIN MAP -->
+  <section style="border-bottom:none;">
+    <div class="sec-head"><h2>Pico pin map</h2></div>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>GPIO</th><th>Function</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td class="pin">GP0–GP3</td><td>Button switches 1–4</td><td class="why">active-low, INPUT_PULLUP</td></tr>
+          <tr><td class="pin">GP6–GP9</td><td>Relay IN 1–4 (Htr·Pump·Ext·Int)</td><td class="why">HIGH = on</td></tr>
+          <tr><td class="pin">GP10–GP13</td><td>Button-LED transistor bases 1–4</td><td class="why">via 1 kΩ; HIGH = LED on</td></tr>
+          <tr><td class="pin">GP16–GP18</td><td>RGB status LED (optional)</td><td class="why">R/G/B, common-anode → 3V3</td></tr>
+          <tr><td class="pin">VSYS · 39</td><td>5 V into the Pico</td><td class="why">from Buck A</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sec-lead" style="margin-top:1.2rem">The 12 V front-end perfboard layout lives on its own page: <a class="link" href="https://claude.ai/code/artifact/e8626ee9-193e-4204-858c-448eb295f5aa">front-end perfboard layout →</a></p>
+  </section>
+
+</main>
+
+<footer class="wrap"><span class="mono">Trailer Controller · Parts List &amp; Build Reference</span> — 12 V → 5 V + 3.5 V · Pico + 4 relays + 4 illuminated buttons</footer>
+
+<script>
+  (function(){
+    var boxes=[].slice.call(document.querySelectorAll('#parts input[type=checkbox]'));
+    var prog=document.getElementById('prog'),KEY='trailer-parts-v2';
+    function save(){try{localStorage.setItem(KEY,JSON.stringify(boxes.map(function(b){return b.checked;})));}catch(e){}}
+    function load(){try{var s=JSON.parse(localStorage.getItem(KEY)||'[]');boxes.forEach(function(b,i){if(s[i])b.checked=true;});}catch(e){}}
+    function upd(){var n=boxes.filter(function(b){return b.checked;}).length;prog.innerHTML='<b>'+n+'</b> / '+boxes.length+' in hand';}
+    load();upd();
+    boxes.forEach(function(b){b.addEventListener('change',function(){save();upd();});});
+    document.getElementById('reset').addEventListener('click',function(){boxes.forEach(function(b){b.checked=false;});save();upd();});
+  })();
+</script>

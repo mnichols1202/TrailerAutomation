@@ -1,0 +1,379 @@
+<title>Trailer Controller — Wiring &amp; Buzz-Out Reference</title>
+<style>
+  :root{
+    --bg:#0e1413; --panel:#151e1c; --panel-2:#1a2523; --line:#26332f; --line-soft:#1f2b28;
+    --ink:#e8efec; --ink-dim:#a2b2ad; --ink-faint:#6d7e79;
+    --copper:#d98247; --copper-hi:#f0a869;
+    --v12:#e56a4a; --v5:#e7a948; --v33:#46b39a; --gpio:#6aa9e0; --gnd:#8a9895;
+    --on:#57c98a; --warn:#e7b64a;
+    --mono:ui-monospace,"Cascadia Code","JetBrains Mono","SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --maxw:74rem;
+  }
+  @media (prefers-color-scheme:light){:root{
+    --bg:#eaeeec; --panel:#f7faf8; --panel-2:#eef3f0; --line:#d3ddd9; --line-soft:#e0e8e4;
+    --ink:#14201d; --ink-dim:#4a5a56; --ink-faint:#7c8a86;
+    --copper:#b5652a; --copper-hi:#c9793c;
+    --v12:#c9502f; --v5:#a9781f; --v33:#2b8a74; --gpio:#3f7bb8; --gnd:#68766f;
+    --on:#2f9c64; --warn:#9c711a;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0e1413; --panel:#151e1c; --panel-2:#1a2523; --line:#26332f; --line-soft:#1f2b28;
+    --ink:#e8efec; --ink-dim:#a2b2ad; --ink-faint:#6d7e79; --copper:#d98247; --copper-hi:#f0a869;
+    --v12:#e56a4a; --v5:#e7a948; --v33:#46b39a; --gpio:#6aa9e0; --gnd:#8a9895; --on:#57c98a; --warn:#e7b64a;
+  }
+  :root[data-theme="light"]{
+    --bg:#eaeeec; --panel:#f7faf8; --panel-2:#eef3f0; --line:#d3ddd9; --line-soft:#e0e8e4;
+    --ink:#14201d; --ink-dim:#4a5a56; --ink-faint:#7c8a86; --copper:#b5652a; --copper-hi:#c9793c;
+    --v12:#c9502f; --v5:#a9781f; --v33:#2b8a74; --gpio:#3f7bb8; --gnd:#68766f; --on:#2f9c64; --warn:#9c711a;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15.5px;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 1.4rem;}
+  h1,h2,h3{text-wrap:balance;line-height:1.15;margin:0;}
+  .mono{font-family:var(--mono);}
+  code{font-family:var(--mono);font-size:.85em;background:var(--panel-2);border:1px solid var(--line-soft);padding:.06em .38em;border-radius:5px;}
+  :focus-visible{outline:2px solid var(--copper);outline-offset:2px;border-radius:3px;}
+
+  header.hero{border-bottom:1px solid var(--line);}
+  .hero-in{padding:2.8rem 0 2rem;}
+  .eyebrow{font-family:var(--mono);font-size:.73rem;letter-spacing:.2em;text-transform:uppercase;color:var(--copper);display:flex;align-items:center;gap:.7rem;margin-bottom:1rem;}
+  .eyebrow::before{content:"";width:1.6rem;height:2px;background:var(--copper);}
+  .hero h1{font-size:clamp(1.8rem,4.4vw,2.7rem);font-weight:680;letter-spacing:-.015em;}
+  .hero .lede{margin-top:.9rem;max-width:52ch;color:var(--ink-dim);}
+
+  /* rail legend */
+  .legend{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.5rem;}
+  .lg{font-family:var(--mono);font-size:.76rem;display:flex;align-items:center;gap:.45rem;padding:.3rem .6rem;border:1px solid var(--line);border-radius:20px;background:var(--panel);}
+  .lg i{width:.85rem;height:.85rem;border-radius:3px;flex:none;}
+
+  section{padding:2.6rem 0;border-bottom:1px solid var(--line-soft);}
+  .sec-head{display:flex;align-items:baseline;gap:.9rem;margin-bottom:.4rem;}
+  .sec-head .idx{font-family:var(--mono);font-size:.78rem;color:var(--copper);}
+  .sec-head h2{font-size:1.32rem;font-weight:640;letter-spacing:-.01em;}
+  .sec-lead{color:var(--ink-dim);max-width:64ch;margin:.4rem 0 1.4rem;font-size:.93rem;}
+
+  .scroller{overflow-x:auto;}
+
+  /* deck diagram */
+  .decks{display:grid;grid-template-columns:1fr;gap:.8rem;min-width:36rem;}
+  .deck{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:1rem 1.1rem;}
+  .deck .dh{font-family:var(--mono);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:.7rem;display:flex;justify-content:space-between;}
+  .row{display:flex;flex-wrap:wrap;gap:.5rem;}
+  .box{font-family:var(--mono);font-size:.78rem;border:1px solid var(--line);border-radius:7px;padding:.5rem .7rem;background:var(--panel-2);flex:1;min-width:7rem;text-align:center;}
+  .box small{display:block;color:var(--ink-faint);font-size:.68rem;margin-top:.15rem;}
+  .box.pico{border-color:color-mix(in srgb,var(--copper) 50%,var(--line));} .box.pico b{color:var(--copper);}
+  .box.pwr{border-color:color-mix(in srgb,var(--v5) 45%,var(--line));}
+  .box.rly{border-color:color-mix(in srgb,var(--v33) 42%,var(--line));}
+  .risers{display:flex;align-items:center;justify-content:center;gap:.5rem;padding:.3rem 0;color:var(--ink-faint);font-family:var(--mono);font-size:.74rem;flex-wrap:wrap;}
+  .risers b{color:var(--gpio);}
+
+  /* wire tables */
+  table{border-collapse:collapse;width:100%;font-size:.86rem;min-width:44rem;}
+  thead th{text-align:left;font-family:var(--mono);font-size:.68rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);padding:.5rem .7rem;border-bottom:1px solid var(--line);font-weight:600;}
+  tbody td{padding:.5rem .7rem;border-bottom:1px solid var(--line-soft);vertical-align:middle;}
+  tbody tr:hover{background:color-mix(in srgb,var(--copper) 5%,transparent);}
+  .from,.to{font-family:var(--mono);font-size:.83rem;}
+  .to{color:var(--ink);} .from{color:var(--ink-dim);}
+  .ar{color:var(--ink-faint);padding:0 .1rem;}
+  td.net{white-space:nowrap;}
+  .np{font-family:var(--mono);font-size:.7rem;padding:.12rem .5rem;border-radius:20px;border:1px solid var(--line);display:inline-flex;align-items:center;gap:.35rem;}
+  .np i{width:.6rem;height:.6rem;border-radius:2px;}
+  .note{color:var(--ink-faint);font-size:.82rem;}
+  .ck{width:1.6rem;text-align:center;}
+  input[type=checkbox]{width:1.15rem;height:1.15rem;accent-color:var(--on);cursor:pointer;}
+  .tabnum{font-variant-numeric:tabular-nums;}
+
+  /* group label rows */
+  .grp td{background:var(--panel-2);font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--copper);border-bottom:1px solid var(--line);padding:.45rem .7rem;}
+
+  .callout{border:1px solid color-mix(in srgb,var(--warn) 42%,var(--line));background:color-mix(in srgb,var(--warn) 8%,var(--panel));border-radius:10px;padding:.95rem 1.15rem;margin-top:1.3rem;font-size:.9rem;color:var(--ink-dim);}
+  .callout b{color:var(--warn);}
+  .callout.crit{border-color:color-mix(in srgb,var(--v12) 50%,var(--line));background:color-mix(in srgb,var(--v12) 9%,var(--panel));}
+  .callout.crit b{color:var(--v12);}
+
+  ol.check{list-style:none;counter-reset:step;margin:0;padding:0;}
+  ol.check li{counter-increment:step;position:relative;padding:.6rem 0 .6rem 2.5rem;border-bottom:1px solid var(--line-soft);color:var(--ink-dim);font-size:.92rem;}
+  ol.check li::before{content:counter(step,decimal-leading-zero);position:absolute;left:0;top:.6rem;font-family:var(--mono);font-size:.76rem;color:var(--on);border:1px solid color-mix(in srgb,var(--on) 40%,var(--line));width:1.65rem;height:1.65rem;border-radius:5px;display:flex;align-items:center;justify-content:center;}
+  ol.check li b{color:var(--ink);}
+
+  .toolbar{display:flex;gap:.6rem;align-items:center;margin:.2rem 0 1rem;font-size:.82rem;color:var(--ink-faint);font-family:var(--mono);}
+  .toolbar button{font-family:var(--mono);font-size:.76rem;color:var(--ink-dim);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:.3rem .6rem;cursor:pointer;}
+  .toolbar button:hover{color:var(--ink);border-color:var(--copper);}
+  #prog{color:var(--on);}
+
+  svg.sch{display:block;min-width:54rem;width:100%;height:auto;}
+  svg.sch .bus{fill:none;stroke-width:5;stroke-linecap:round;}
+  svg.sch .drop{fill:none;stroke-width:2.5;stroke-linecap:round;}
+  svg.sch .sig{fill:none;stroke:var(--gpio);stroke-width:2;stroke-linecap:round;}
+  svg.sch .blk{fill:var(--panel);stroke:var(--line);stroke-width:1.5;}
+  svg.sch .blk.acc{stroke:color-mix(in srgb,var(--copper) 55%,var(--line));}
+  svg.sch .t{font-family:var(--mono);fill:var(--ink);font-size:14px;font-weight:700;}
+  svg.sch .p{font-family:var(--mono);fill:var(--ink-dim);font-size:11.5px;}
+  svg.sch .c{font-family:var(--mono);fill:var(--ink-faint);font-size:11px;}
+  svg.sch .rl{font-family:var(--mono);font-size:12px;font-weight:700;}
+  svg.sch .sl{font-family:var(--mono);fill:var(--gpio);font-size:11px;font-weight:600;}
+
+  footer{padding:2rem 0 3rem;color:var(--ink-faint);font-size:.8rem;}
+</style>
+
+<header class="hero">
+  <div class="wrap hero-in">
+    <div class="eyebrow">Wiring &amp; Buzz-Out Reference · PicoW-001</div>
+    <h1>Every wire, every pin — tick them off as you go.</h1>
+    <p class="lede">One row per connection, color-coded by the rail it carries. Buzz each with a meter and check the box. Power on one deck, logic on the other, a clear chimney up the middle.</p>
+    <div class="legend">
+      <span class="lg"><i style="background:var(--v12)"></i>12&nbsp;V in</span>
+      <span class="lg"><i style="background:var(--v5)"></i>5&nbsp;V rail</span>
+      <span class="lg"><i style="background:var(--v33)"></i>3.5&nbsp;V coil rail</span>
+      <span class="lg"><i style="background:var(--gpio)"></i>GPIO / signal</span>
+      <span class="lg"><i style="background:var(--gnd)"></i>GND</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- DECK MAP -->
+  <section>
+    <div class="sec-head"><span class="idx">A</span><h2>Deck map</h2></div>
+    <p class="sec-lead">Where each part physically lives, and what crosses between the two decks. Load wires never come upstairs; the center stays open for the fan.</p>
+    <div class="scroller">
+      <div class="decks">
+        <div class="deck">
+          <div class="dh"><span>Upper deck — electronics</span><span>left = power · right = signal</span></div>
+          <div class="row">
+            <div class="box pwr"><b>12V IN</b><small>fuse·rev·TVS</small></div>
+            <div class="box pwr"><b>MP1584</b><small>→ 5.0 V</small></div>
+            <div class="box pwr"><b>AMS1117</b><small>→ 3.5 V</small></div>
+            <div class="box"><b>4× LED FET</b><small>low-side</small></div>
+            <div class="box"><b>Term blocks</b><small>buttons·fan</small></div>
+          </div>
+        </div>
+        <div class="risers">▲▼ risers &nbsp; <b>5V, 3.5V, GND</b> down &nbsp;·&nbsp; <b>GP0–3 + GP10–13</b> to Pico &nbsp;·&nbsp; center vent stays clear</div>
+        <div class="deck">
+          <div class="dh"><span>Lower deck — Pico + relays</span><span>center = Pico · sides = relays</span></div>
+          <div class="row">
+            <div class="box rly"><b>Relay 1</b><small>Water Heater</small></div>
+            <div class="box rly"><b>Relay 2</b><small>Water Pump</small></div>
+            <div class="box pico"><b>Pico 2W</b><small>headerless, flat</small></div>
+            <div class="box rly"><b>Relay 3</b><small>Ext Lights</small></div>
+            <div class="box rly"><b>Relay 4</b><small>Int Lights</small></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCHEMATIC -->
+  <section>
+    <div class="sec-head"><span class="idx">A2</span><h2>Schematic</h2></div>
+    <p class="sec-lead">The netlist as a diagram. Thick horizontal lines are the power <b>buses</b>; components tap them with matching-color <b>drops</b>; <span style="color:var(--gpio)">blue</span> lines are Pico signals. Relays and buttons are drawn once — all four channels are identical.</p>
+    <div class="scroller">
+      <svg class="sch" viewBox="0 0 960 590" role="img" aria-label="Wiring schematic of the trailer controller">
+        <!-- BUSES -->
+        <line class="bus" x1="125" y1="162" x2="930" y2="162" stroke="var(--v5)"/>
+        <text class="rl" x="905" y="153" fill="var(--v5)" text-anchor="end">5 V</text>
+        <line class="bus" x1="125" y1="252" x2="770" y2="252" stroke="var(--v33)"/>
+        <text class="rl" x="745" y="243" fill="var(--v33)" text-anchor="end">3.5 V</text>
+        <line class="bus" x1="60" y1="558" x2="930" y2="558" stroke="var(--gnd)"/>
+        <text class="rl" x="66" y="549" fill="var(--gnd)">GND</text>
+
+        <!-- POWER COLUMN -->
+        <rect class="blk" x="40" y="28" width="170" height="46" rx="7"/>
+        <text class="t" x="56" y="50">12 V IN</text>
+        <text class="c" x="56" y="66">fuse · reverse · TVS</text>
+
+        <rect class="blk" x="40" y="96" width="170" height="40" rx="7"/>
+        <text class="t" x="56" y="121">MP1584 → 5.0 V</text>
+
+        <rect class="blk" x="40" y="188" width="170" height="40" rx="7"/>
+        <text class="t" x="56" y="213">AMS1117 → 3.5 V</text>
+
+        <!-- POWER DROPS -->
+        <line class="drop" x1="125" y1="74" x2="125" y2="96" stroke="var(--v12)"/>
+        <line class="drop" x1="125" y1="136" x2="125" y2="162" stroke="var(--v5)"/>
+        <line class="drop" x1="165" y1="162" x2="165" y2="188" stroke="var(--v5)"/>
+        <line class="drop" x1="125" y1="228" x2="125" y2="252" stroke="var(--v33)"/>
+
+        <!-- BUTTON + LED BLOCK -->
+        <rect class="blk" x="40" y="298" width="200" height="176" rx="8"/>
+        <text class="t" x="56" y="322">Button + LED ×4</text>
+        <text class="p" x="56" y="348">SW → GP0–3</text>
+        <text class="p" x="56" y="370">LED+ → 5 V</text>
+        <text class="p" x="56" y="392">LED− → FET → GND</text>
+        <text class="p" x="56" y="414">gate ← GP10–13</text>
+        <text class="c" x="56" y="438">FET low-side, on this deck</text>
+        <text class="c" x="56" y="456">panel-mounted, IP65</text>
+
+        <!-- PICO -->
+        <rect class="blk acc" x="392" y="292" width="196" height="206" rx="8"/>
+        <text class="t" x="408" y="316" fill="var(--copper)">Pico 2W</text>
+        <text class="p" x="408" y="346">VSYS ▲ 5 V</text>
+        <text class="p" x="408" y="380">◀ GP0–3</text>
+        <text class="p" x="408" y="410">◀ GP10–13</text>
+        <text class="p" x="572" y="380" text-anchor="end">GP6–9 ▶</text>
+        <text class="p" x="572" y="450" text-anchor="end">GP16–18 ▶</text>
+        <text class="p" x="490" y="486" text-anchor="middle">GND ▼</text>
+
+        <!-- RELAY BLOCK -->
+        <rect class="blk" x="724" y="300" width="196" height="152" rx="8"/>
+        <text class="t" x="740" y="324">Relay ×4</text>
+        <text class="c" x="740" y="340">JQC3F-03VDC · jumper ON</text>
+        <text class="p" x="740" y="366">VCC ← 3.5 V</text>
+        <text class="p" x="740" y="388">IN ← GP6–9</text>
+        <text class="p" x="740" y="410">GND</text>
+        <text class="p" x="740" y="432">COM/NO → load ▶</text>
+
+        <!-- FAN -->
+        <rect class="blk" x="724" y="486" width="120" height="40" rx="7"/>
+        <text class="t" x="740" y="511">Fan 5 V</text>
+
+        <!-- RGB -->
+        <rect class="blk" x="560" y="502" width="150" height="40" rx="7"/>
+        <text class="t" x="574" y="527">RGB status</text>
+
+        <!-- 5V TAPS -->
+        <line class="drop" x1="200" y1="162" x2="200" y2="298" stroke="var(--v5)"/>
+        <line class="drop" x1="430" y1="162" x2="430" y2="292" stroke="var(--v5)"/>
+        <line class="drop" x1="830" y1="162" x2="830" y2="486" stroke="var(--v5)"/>
+
+        <!-- 3.5V TAP -->
+        <line class="drop" x1="762" y1="252" x2="762" y2="300" stroke="var(--v33)"/>
+
+        <!-- GND DROPS -->
+        <line class="drop" x1="140" y1="474" x2="140" y2="558" stroke="var(--gnd)"/>
+        <line class="drop" x1="490" y1="498" x2="490" y2="558" stroke="var(--gnd)"/>
+        <line class="drop" x1="822" y1="452" x2="822" y2="558" stroke="var(--gnd)"/>
+        <line class="drop" x1="784" y1="526" x2="784" y2="558" stroke="var(--gnd)"/>
+
+        <!-- SIGNALS -->
+        <line class="sig" x1="392" y1="376" x2="240" y2="376"/>
+        <text class="sl" x="252" y="370">GP0–3</text>
+        <line class="sig" x1="392" y1="406" x2="240" y2="406"/>
+        <text class="sl" x="252" y="400">GP10–13</text>
+        <line class="sig" x1="588" y1="376" x2="724" y2="376"/>
+        <text class="sl" x="616" y="370">GP6–9</text>
+        <line class="sig" x1="588" y1="446" x2="635" y2="502"/>
+        <text class="sl" x="596" y="440">GP16–18</text>
+      </svg>
+    </div>
+    <p class="sec-lead" style="margin-top:1rem">Read it top-down: 12&nbsp;V comes in, the buck makes the 5&nbsp;V bus, the AMS1117 taps 5&nbsp;V and makes the 3.5&nbsp;V bus for the coils. The Pico sits on 5&nbsp;V and fans signals out — GP6–9 to the relays, GP0–3 + GP10–13 to the buttons. Everything returns to the GND bus.</p>
+  </section>
+
+  <!-- WIRE LIST -->
+  <section>
+    <div class="sec-head"><span class="idx">B</span><h2>Connection list</h2></div>
+    <p class="sec-lead">Buzz each connection with a meter before power-up. Ticks are saved in your browser.</p>
+    <div class="toolbar">
+      <span id="prog">0 / 0 checked</span>
+      <button type="button" id="reset">reset all</button>
+    </div>
+    <div class="scroller">
+      <table id="wires">
+        <thead><tr><th class="ck"></th><th>From</th><th></th><th>To</th><th>Net</th><th>Note</th></tr></thead>
+        <tbody>
+
+          <tr class="grp"><td colspan="6">Power front-end — 12 V input &amp; regulators</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Trailer 12 V+</td><td class="ar">→</td><td class="to">Fuse 2 A → reverse-protect → 12 V node</td><td class="net"><span class="np"><i style="background:var(--v12)"></i>12 V</span></td><td class="note">TVS (SMBJ15A) node→GND after protect</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Trailer 12 V−</td><td class="ar">→</td><td class="to">GND star point</td><td class="net"><span class="np"><i style="background:var(--gnd)"></i>GND</span></td><td class="note">single ground reference at input terminal</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">12 V node</td><td class="ar">→</td><td class="to">MP1584 V<sub>IN</sub>+ / V<sub>IN</sub>−</td><td class="net"><span class="np"><i style="background:var(--v12)"></i>12 V</span></td><td class="note">—</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">MP1584 V<sub>OUT</sub></td><td class="ar">→</td><td class="to">5 V rail node</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">set to <b>5.00 V</b> first, no load</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">5 V rail</td><td class="ar">→</td><td class="to">Bulk cap 470–1000 µF → GND</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">coil-inrush reservoir</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">5 V rail</td><td class="ar">→</td><td class="to">AMS1117 V<sub>IN</sub> / GND</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">—</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">AMS1117 V<sub>OUT</sub></td><td class="ar">→</td><td class="to">3.5 V rail node</td><td class="net"><span class="np"><i style="background:var(--v33)"></i>3.5 V</span></td><td class="note">adj: set <b>~3.5 V</b> before wiring relays</td></tr>
+
+          <tr class="grp"><td colspan="6">5 V rail consumers</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">5 V rail</td><td class="ar">→</td><td class="to">Pico <b>VSYS</b> (pin 39)</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">riser to lower deck</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">5 V rail</td><td class="ar">→</td><td class="to">Fan + &nbsp;·&nbsp; Fan − → GND</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">5 V 0.12 A, always-on</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">5 V rail</td><td class="ar">→</td><td class="to">Button LED anodes ×4 (all LED+)</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">distribute to the 4 buttons</td></tr>
+
+          <tr class="grp"><td colspan="6">3.5 V coil rail → relay VCC (jumper ON)</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">3.5 V rail</td><td class="ar">→</td><td class="to">Relay 1 VCC</td><td class="net"><span class="np"><i style="background:var(--v33)"></i>3.5 V</span></td><td class="note">coil + opto share this</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">3.5 V rail</td><td class="ar">→</td><td class="to">Relay 2 VCC</td><td class="net"><span class="np"><i style="background:var(--v33)"></i>3.5 V</span></td><td class="note">—</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">3.5 V rail</td><td class="ar">→</td><td class="to">Relay 3 VCC</td><td class="net"><span class="np"><i style="background:var(--v33)"></i>3.5 V</span></td><td class="note">—</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">3.5 V rail</td><td class="ar">→</td><td class="to">Relay 4 VCC</td><td class="net"><span class="np"><i style="background:var(--v33)"></i>3.5 V</span></td><td class="note">—</td></tr>
+
+          <tr class="grp"><td colspan="6">Relay triggers — Pico → IN (both on lower deck, keep short)</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Pico <b>GP6</b></td><td class="ar">→</td><td class="to">Relay 1 IN &nbsp;·&nbsp; Water Heater</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">HIGH = on</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Pico <b>GP7</b></td><td class="ar">→</td><td class="to">Relay 2 IN &nbsp;·&nbsp; Water Pump</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">HIGH = on</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Pico <b>GP8</b></td><td class="ar">→</td><td class="to">Relay 3 IN &nbsp;·&nbsp; Exterior Lights</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">HIGH = on</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Pico <b>GP9</b></td><td class="ar">→</td><td class="to">Relay 4 IN &nbsp;·&nbsp; Interior Lights</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">HIGH = on</td></tr>
+
+          <tr class="grp"><td colspan="6">Button switches — 1 leg to GPIO, 1 leg to GND</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 1 SW</td><td class="ar">→</td><td class="to">Pico <b>GP0</b> &nbsp;·&nbsp; other leg → GND</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">active-low, INPUT_PULLUP</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 2 SW</td><td class="ar">→</td><td class="to">Pico <b>GP1</b> &nbsp;·&nbsp; other leg → GND</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">no resistor needed</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 3 SW</td><td class="ar">→</td><td class="to">Pico <b>GP2</b> &nbsp;·&nbsp; other leg → GND</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">—</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 4 SW</td><td class="ar">→</td><td class="to">Pico <b>GP3</b> &nbsp;·&nbsp; other leg → GND</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">—</td></tr>
+
+          <tr class="grp"><td colspan="6">Button LEDs — low-side FET (gate 100 Ω, 100 kΩ gate→GND, source→GND)</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 1 LED−</td><td class="ar">→</td><td class="to">FET1 drain &nbsp;·&nbsp; gate ← <b>GP10</b></td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">LED+ already on 5 V</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 2 LED−</td><td class="ar">→</td><td class="to">FET2 drain &nbsp;·&nbsp; gate ← <b>GP11</b></td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">—</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 3 LED−</td><td class="ar">→</td><td class="to">FET3 drain &nbsp;·&nbsp; gate ← <b>GP12</b></td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">—</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 4 LED−</td><td class="ar">→</td><td class="to">FET4 drain &nbsp;·&nbsp; gate ← <b>GP13</b></td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">—</td></tr>
+
+          <tr class="grp"><td colspan="6">RGB status LED — common anode (existing)</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">RGB anode</td><td class="ar">→</td><td class="to">Pico <b>3V3</b> (pin 36)</td><td class="net"><span class="np"><i style="background:var(--v33)"></i>3.3 V</span></td><td class="note">few mA only — fine to load here</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">RGB R / G / B</td><td class="ar">→</td><td class="to">220 Ω → <b>GP16 / GP17 / GP18</b></td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">driven LOW = on (inverted)</td></tr>
+
+          <tr class="grp"><td colspan="6">Ground returns — all to the star point</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Pico GND ×</td><td class="ar">→</td><td class="to">GND star</td><td class="net"><span class="np"><i style="background:var(--gnd)"></i>GND</span></td><td class="note">any Pico GND pin (3, 8, 38…)</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Relay GND ×4 · FET source ×4 · SW GND ×4</td><td class="ar">→</td><td class="to">GND star</td><td class="net"><span class="np"><i style="background:var(--gnd)"></i>GND</span></td><td class="note">common the whole low-voltage side</td></tr>
+
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- LOADS -->
+  <section>
+    <div class="sec-head"><span class="idx">C</span><h2>Relay load side</h2></div>
+    <p class="sec-lead">This is the one part that depends on what each device actually is. Use <b>COM + NO</b> so every load is <b>off at boot</b>. These wires exit the lower deck straight to the trailer — they never come up to the electronics deck.</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Relay</th><th>COM</th><th>NO</th><th>State at boot</th></tr></thead>
+        <tbody>
+          <tr><td class="to">1 · Water Heater</td><td class="from">source</td><td class="from">→ load</td><td class="note">OFF</td></tr>
+          <tr><td class="to">2 · Water Pump</td><td class="from">source</td><td class="from">→ load</td><td class="note">OFF</td></tr>
+          <tr><td class="to">3 · Exterior Lights</td><td class="from">source</td><td class="from">→ load</td><td class="note">OFF</td></tr>
+          <tr><td class="to">4 · Interior Lights</td><td class="from">source</td><td class="from">→ load</td><td class="note">OFF</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout crit"><b>Check current before you trust these contacts.</b> The relay is rated <b>10 A</b>. A 12 V pump or LED lighting is fine. But if your <b>water heater</b> switches a mains (120 V AC) electric element, that can pull 10–12 A and exceeds this relay — drive a proper <b>contactor</b> with the relay instead of switching the element directly. Confirm each load's voltage and current against the 10 A / 250 V AC / 30 V DC rating first.</div>
+  </section>
+
+  <!-- BUILD ORDER -->
+  <section style="border-bottom:none;">
+    <div class="sec-head"><span class="idx">D</span><h2>Bring-up order</h2></div>
+    <p class="sec-lead">Set voltages before anything downstream is connected — an unset AMS1117 pot can sit near 4.5 V and cook the 3 V coils.</p>
+    <ol class="check">
+      <li>Bench the <b>MP1584</b> alone, set <b>5.00 V</b>, meter it. Then wire the 5 V rail.</li>
+      <li>Bench the <b>AMS1117</b> from 5 V, set <b>~3.5 V</b>, meter it — <b>before</b> it touches any relay VCC.</li>
+      <li>Buzz out every row above with a meter (continuity + no shorts rail-to-GND). Tick as you go.</li>
+      <li>Power 12 V. Confirm 5 V and 3.5 V rails present; confirm the Pico boots (RGB status).</li>
+      <li>Confirm <code>data/config.json</code> has <code>LedPin</code> 10–13, then <code>pio run -e pico2w --target buildunified</code> → flash. Monitor 115200.</li>
+      <li>Press each button → its relay <b>and</b> LED follow. Toggle from the web UI → the LED tracks too.</li>
+      <li>Relays should latch crisply off the stiff 3.5 V. If one is lazy, nudge the AMS1117 toward <b>~3.6 V</b> (still safe for a 3 V coil).</li>
+    </ol>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <span class="mono">Trailer Controller · Wiring &amp; Buzz-Out Reference · PicoW-001</span> — 12 V → 5 V + 3.5 V · Pico + 4 relays + 4 illuminated buttons
+</footer>
+
+<script>
+  (function(){
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('#wires input[type=checkbox]'));
+    var prog = document.getElementById('prog');
+    var KEY = 'trailer-wire-checks-v1';
+    function save(){ try{ localStorage.setItem(KEY, JSON.stringify(boxes.map(function(b){return b.checked;}))); }catch(e){} }
+    function load(){ try{ var s=JSON.parse(localStorage.getItem(KEY)||'[]'); boxes.forEach(function(b,i){ if(s[i]) b.checked=true; }); }catch(e){} }
+    function upd(){ var n=boxes.filter(function(b){return b.checked;}).length; prog.textContent = n+' / '+boxes.length+' checked'; }
+    load(); upd();
+    boxes.forEach(function(b){ b.addEventListener('change', function(){ save(); upd(); }); });
+    document.getElementById('reset').addEventListener('click', function(){ boxes.forEach(function(b){ b.checked=false; }); save(); upd(); });
+  })();
+</script>
