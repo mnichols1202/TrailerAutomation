@@ -137,20 +137,20 @@
   <!-- DECK MAP -->
   <section>
     <div class="sec-head"><span class="idx">A</span><h2>Deck map</h2></div>
-    <p class="sec-lead">Where each part physically lives, and what crosses between the two decks. Load wires never come upstairs; the center stays open for the fan.</p>
+    <p class="sec-lead">Where each part physically lives, and what crosses between the two decks. Load wires never come upstairs; the center stays open for the fan. The two inter-deck plugs are different sizes so they can't be swapped.</p>
     <div class="scroller">
       <div class="decks">
         <div class="deck">
           <div class="dh"><span>Upper deck — electronics</span><span>left = power · right = signal</span></div>
           <div class="row">
-            <div class="box pwr"><b>12V IN</b><small>fuse·rev·TVS</small></div>
-            <div class="box pwr"><b>MP1584</b><small>→ 5.0 V</small></div>
-            <div class="box pwr"><b>AMS1117</b><small>→ 3.5 V</small></div>
-            <div class="box"><b>4× LED FET</b><small>low-side</small></div>
+            <div class="box pwr"><b>12V IN</b><small>fuse 3A·P-FET·TVS</small></div>
+            <div class="box pwr"><b>Buck A</b><small>→ 5.0 V</small></div>
+            <div class="box pwr"><b>Buck B</b><small>→ 3.5 V</small></div>
+            <div class="box"><b>4× LED driver</b><small>2N2222, low-side</small></div>
             <div class="box"><b>Term blocks</b><small>buttons·fan</small></div>
           </div>
         </div>
-        <div class="risers">▲▼ risers &nbsp; <b>5V, 3.5V, GND</b> down &nbsp;·&nbsp; <b>GP0–3 + GP10–13</b> to Pico &nbsp;·&nbsp; center vent stays clear</div>
+        <div class="risers">▲▼ two keyed JST-XH plugs — <b>power (4-pin):</b> 5V, 3.5V, GND, GND &nbsp;·&nbsp; <b>data (8-pin):</b> GP0–3 + GP10–13 &nbsp;·&nbsp; center vent stays clear</div>
         <div class="deck">
           <div class="dh"><span>Lower deck — Pico + relays</span><span>center = Pico · sides = relays</span></div>
           <div class="row">
@@ -182,13 +182,13 @@
         <!-- POWER COLUMN -->
         <rect class="blk" x="40" y="28" width="170" height="46" rx="7"/>
         <text class="t" x="56" y="50">12 V IN</text>
-        <text class="c" x="56" y="66">fuse · reverse · TVS</text>
+        <text class="c" x="56" y="66">fuse 3A · P-FET · TVS</text>
 
         <rect class="blk" x="40" y="96" width="170" height="40" rx="7"/>
-        <text class="t" x="56" y="121">MP1584 → 5.0 V</text>
+        <text class="t" x="56" y="121">Buck A → 5.0 V</text>
 
         <rect class="blk" x="40" y="188" width="170" height="40" rx="7"/>
-        <text class="t" x="56" y="213">AMS1117 → 3.5 V</text>
+        <text class="t" x="56" y="213">Buck B → 3.5 V</text>
 
         <!-- POWER DROPS -->
         <line class="drop" x1="125" y1="74" x2="125" y2="96" stroke="var(--v12)"/>
@@ -201,10 +201,10 @@
         <text class="t" x="56" y="322">Button + LED ×4</text>
         <text class="p" x="56" y="348">SW → GP0–3</text>
         <text class="p" x="56" y="370">LED+ → 5 V</text>
-        <text class="p" x="56" y="392">LED− → FET → GND</text>
-        <text class="p" x="56" y="414">gate ← GP10–13</text>
-        <text class="c" x="56" y="438">FET low-side, on this deck</text>
-        <text class="c" x="56" y="456">panel-mounted, IP65</text>
+        <text class="p" x="56" y="392">LED− → Q (2N2222) → GND</text>
+        <text class="p" x="56" y="414">base ← 1 kΩ ← GP10–13</text>
+        <text class="c" x="56" y="438">2N2222 NPN, low-side</text>
+        <text class="c" x="56" y="456">switch panel-mounted, IP65</text>
 
         <!-- PICO -->
         <rect class="blk acc" x="392" y="292" width="196" height="206" rx="8"/>
@@ -258,7 +258,7 @@
         <text class="sl" x="596" y="440">GP16–18</text>
       </svg>
     </div>
-    <p class="sec-lead" style="margin-top:1rem">Read it top-down: 12&nbsp;V comes in, the buck makes the 5&nbsp;V bus, the AMS1117 taps 5&nbsp;V and makes the 3.5&nbsp;V bus for the coils. The Pico sits on 5&nbsp;V and fans signals out — GP6–9 to the relays, GP0–3 + GP10–13 to the buttons. Everything returns to the GND bus.</p>
+    <p class="sec-lead" style="margin-top:1rem">Read it top-down: 12&nbsp;V comes in through the fuse, the P-FET reverse-polarity guard, and the TVS clamp, then splits to two independent bucks — Buck A makes the 5&nbsp;V bus, Buck B makes the 3.5&nbsp;V bus for the coils. Neither is cascaded off the other. The Pico sits on 5&nbsp;V and fans signals out — GP6–9 to the relays, GP0–3 + GP10–13 across the JST-XH data plug to the buttons. Everything returns to the GND bus.</p>
   </section>
 
   <!-- WIRE LIST -->
@@ -274,17 +274,25 @@
         <thead><tr><th class="ck"></th><th>From</th><th></th><th>To</th><th>Net</th><th>Note</th></tr></thead>
         <tbody>
 
-          <tr class="grp"><td colspan="6">Power front-end — 12 V input &amp; regulators</td></tr>
-          <tr><td class="ck"><input type="checkbox"></td><td class="from">Trailer 12 V+</td><td class="ar">→</td><td class="to">Fuse 2 A → reverse-protect → 12 V node</td><td class="net"><span class="np"><i style="background:var(--v12)"></i>12 V</span></td><td class="note">TVS (SMBJ15A) node→GND after protect</td></tr>
+          <tr class="grp"><td colspan="6">Power front-end — 12 V input, protection &amp; regulators</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Trailer 12 V+</td><td class="ar">→</td><td class="to">XT30+ → Fuse 3 A → IRF9540N <b>Drain</b></td><td class="net"><span class="np"><i style="background:var(--v12)"></i>12 V</span></td><td class="note">fused, unprotected 12 V</td></tr>
           <tr><td class="ck"><input type="checkbox"></td><td class="from">Trailer 12 V−</td><td class="ar">→</td><td class="to">GND star point</td><td class="net"><span class="np"><i style="background:var(--gnd)"></i>GND</span></td><td class="note">single ground reference at input terminal</td></tr>
-          <tr><td class="ck"><input type="checkbox"></td><td class="from">12 V node</td><td class="ar">→</td><td class="to">MP1584 V<sub>IN</sub>+ / V<sub>IN</sub>−</td><td class="net"><span class="np"><i style="background:var(--v12)"></i>12 V</span></td><td class="note">—</td></tr>
-          <tr><td class="ck"><input type="checkbox"></td><td class="from">MP1584 V<sub>OUT</sub></td><td class="ar">→</td><td class="to">5 V rail node</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">set to <b>5.00 V</b> first, no load</td></tr>
-          <tr><td class="ck"><input type="checkbox"></td><td class="from">5 V rail</td><td class="ar">→</td><td class="to">Bulk cap 470–1000 µF → GND</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">coil-inrush reservoir</td></tr>
-          <tr><td class="ck"><input type="checkbox"></td><td class="from">5 V rail</td><td class="ar">→</td><td class="to">AMS1117 V<sub>IN</sub> / GND</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">—</td></tr>
-          <tr><td class="ck"><input type="checkbox"></td><td class="from">AMS1117 V<sub>OUT</sub></td><td class="ar">→</td><td class="to">3.5 V rail node</td><td class="net"><span class="np"><i style="background:var(--v33)"></i>3.5 V</span></td><td class="note">adj: set <b>~3.5 V</b> before wiring relays</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">IRF9540N <b>Source</b></td><td class="ar">→</td><td class="to">Protected 12 V node</td><td class="net"><span class="np"><i style="background:var(--v12)"></i>12 V</span></td><td class="note">reverse-polarity protection — Drain is the input side</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">IRF9540N <b>Gate</b></td><td class="ar">→</td><td class="to">100 kΩ → GND &nbsp;·&nbsp; Zener BZX55C12 → protected 12 V (stripe up)</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>bias</span></td><td class="note">gate pull-down + spike clamp</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Protected 12 V node</td><td class="ar">→</td><td class="to">TVS 1.5KE18A → GND (stripe to +12 V)</td><td class="net"><span class="np"><i style="background:var(--v12)"></i>12 V</span></td><td class="note">line surge clamp</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Protected 12 V node</td><td class="ar">→</td><td class="to"><b>Buck A</b> V<sub>IN</sub>+ / V<sub>IN</sub>−</td><td class="net"><span class="np"><i style="background:var(--v12)"></i>12 V</span></td><td class="note">independent of Buck B</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Protected 12 V node</td><td class="ar">→</td><td class="to"><b>Buck B</b> V<sub>IN</sub>+ / V<sub>IN</sub>−</td><td class="net"><span class="np"><i style="background:var(--v12)"></i>12 V</span></td><td class="note">independent of Buck A — not cascaded off 5 V</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from"><b>Buck A</b> V<sub>OUT</sub></td><td class="ar">→</td><td class="to">5 V rail node</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">set to <b>5.00 V</b> first, no load</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">5 V rail</td><td class="ar">→</td><td class="to">Bulk cap 1000 µF / 25 V → GND</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">coil-inrush reservoir</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from"><b>Buck B</b> V<sub>OUT</sub></td><td class="ar">→</td><td class="to">3.5 V rail node</td><td class="net"><span class="np"><i style="background:var(--v33)"></i>3.5 V</span></td><td class="note">set to <b>~3.5 V</b> first, no load — before it touches any relay VCC</td></tr>
+
+          <tr class="grp"><td colspan="6">Inter-deck plugs — JST-XH, two sizes so they can't be cross-plugged</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Upper deck (bucks)</td><td class="ar">→</td><td class="to"><b>Power plug, 4-pin:</b> 5 V, 3.5 V, GND, GND</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5V/3.5V</span></td><td class="note">→ base deck: Pico VSYS, relay VCC ×4</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Upper deck (button term block)</td><td class="ar">→</td><td class="to"><b>Data plug, 8-pin:</b> GP0–GP3</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">→ base deck: Pico GPIO (button switches)</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Base deck (Pico)</td><td class="ar">→</td><td class="to"><b>Data plug, 8-pin:</b> GP10–GP13</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">→ upper deck: 2N2222 LED-driver bases</td></tr>
 
           <tr class="grp"><td colspan="6">5 V rail consumers</td></tr>
-          <tr><td class="ck"><input type="checkbox"></td><td class="from">5 V rail</td><td class="ar">→</td><td class="to">Pico <b>VSYS</b> (pin 39)</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">riser to lower deck</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">5 V rail</td><td class="ar">→</td><td class="to">Pico <b>VSYS</b> (pin 39)</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">via 4-pin power plug to base deck</td></tr>
           <tr><td class="ck"><input type="checkbox"></td><td class="from">5 V rail</td><td class="ar">→</td><td class="to">Fan + &nbsp;·&nbsp; Fan − → GND</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">5 V 0.12 A, always-on</td></tr>
           <tr><td class="ck"><input type="checkbox"></td><td class="from">5 V rail</td><td class="ar">→</td><td class="to">Button LED anodes ×4 (all LED+)</td><td class="net"><span class="np"><i style="background:var(--v5)"></i>5 V</span></td><td class="note">distribute to the 4 buttons</td></tr>
 
@@ -300,17 +308,17 @@
           <tr><td class="ck"><input type="checkbox"></td><td class="from">Pico <b>GP8</b></td><td class="ar">→</td><td class="to">Relay 3 IN &nbsp;·&nbsp; Exterior Lights</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">HIGH = on</td></tr>
           <tr><td class="ck"><input type="checkbox"></td><td class="from">Pico <b>GP9</b></td><td class="ar">→</td><td class="to">Relay 4 IN &nbsp;·&nbsp; Interior Lights</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">HIGH = on</td></tr>
 
-          <tr class="grp"><td colspan="6">Button switches — 1 leg to GPIO, 1 leg to GND</td></tr>
+          <tr class="grp"><td colspan="6">Button switches — 1 leg to GPIO (via 8-pin data plug), 1 leg to GND</td></tr>
           <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 1 SW</td><td class="ar">→</td><td class="to">Pico <b>GP0</b> &nbsp;·&nbsp; other leg → GND</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">active-low, INPUT_PULLUP</td></tr>
           <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 2 SW</td><td class="ar">→</td><td class="to">Pico <b>GP1</b> &nbsp;·&nbsp; other leg → GND</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">no resistor needed</td></tr>
           <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 3 SW</td><td class="ar">→</td><td class="to">Pico <b>GP2</b> &nbsp;·&nbsp; other leg → GND</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">—</td></tr>
           <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 4 SW</td><td class="ar">→</td><td class="to">Pico <b>GP3</b> &nbsp;·&nbsp; other leg → GND</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">—</td></tr>
 
-          <tr class="grp"><td colspan="6">Button LEDs — low-side FET (gate 100 Ω, 100 kΩ gate→GND, source→GND)</td></tr>
-          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 1 LED−</td><td class="ar">→</td><td class="to">FET1 drain &nbsp;·&nbsp; gate ← <b>GP10</b></td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">LED+ already on 5 V</td></tr>
-          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 2 LED−</td><td class="ar">→</td><td class="to">FET2 drain &nbsp;·&nbsp; gate ← <b>GP11</b></td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">—</td></tr>
-          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 3 LED−</td><td class="ar">→</td><td class="to">FET3 drain &nbsp;·&nbsp; gate ← <b>GP12</b></td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">—</td></tr>
-          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 4 LED−</td><td class="ar">→</td><td class="to">FET4 drain &nbsp;·&nbsp; gate ← <b>GP13</b></td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">—</td></tr>
+          <tr class="grp"><td colspan="6">Button LEDs — low-side 2N2222 NPN (base 1 kΩ from GPIO, emitter → GND) — on upper deck</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 1 LED−</td><td class="ar">→</td><td class="to">Q1 collector &nbsp;·&nbsp; base ← 1 kΩ ← <b>GP10</b> (data plug)</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">LED+ already on 5 V</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 2 LED−</td><td class="ar">→</td><td class="to">Q2 collector &nbsp;·&nbsp; base ← 1 kΩ ← <b>GP11</b> (data plug)</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">—</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 3 LED−</td><td class="ar">→</td><td class="to">Q3 collector &nbsp;·&nbsp; base ← 1 kΩ ← <b>GP12</b> (data plug)</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">—</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Button 4 LED−</td><td class="ar">→</td><td class="to">Q4 collector &nbsp;·&nbsp; base ← 1 kΩ ← <b>GP13</b> (data plug)</td><td class="net"><span class="np"><i style="background:var(--gpio)"></i>GPIO</span></td><td class="note">—</td></tr>
 
           <tr class="grp"><td colspan="6">RGB status LED — common anode (existing)</td></tr>
           <tr><td class="ck"><input type="checkbox"></td><td class="from">RGB anode</td><td class="ar">→</td><td class="to">Pico <b>3V3</b> (pin 36)</td><td class="net"><span class="np"><i style="background:var(--v33)"></i>3.3 V</span></td><td class="note">few mA only — fine to load here</td></tr>
@@ -318,7 +326,7 @@
 
           <tr class="grp"><td colspan="6">Ground returns — all to the star point</td></tr>
           <tr><td class="ck"><input type="checkbox"></td><td class="from">Pico GND ×</td><td class="ar">→</td><td class="to">GND star</td><td class="net"><span class="np"><i style="background:var(--gnd)"></i>GND</span></td><td class="note">any Pico GND pin (3, 8, 38…)</td></tr>
-          <tr><td class="ck"><input type="checkbox"></td><td class="from">Relay GND ×4 · FET source ×4 · SW GND ×4</td><td class="ar">→</td><td class="to">GND star</td><td class="net"><span class="np"><i style="background:var(--gnd)"></i>GND</span></td><td class="note">common the whole low-voltage side</td></tr>
+          <tr><td class="ck"><input type="checkbox"></td><td class="from">Relay GND ×4 · LED-driver emitter ×4 · SW GND ×4</td><td class="ar">→</td><td class="to">GND star</td><td class="net"><span class="np"><i style="background:var(--gnd)"></i>GND</span></td><td class="note">common the whole low-voltage side; decks tie together via 2 GND pins in the power plug</td></tr>
 
         </tbody>
       </table>
@@ -346,15 +354,16 @@
   <!-- BUILD ORDER -->
   <section style="border-bottom:none;">
     <div class="sec-head"><span class="idx">D</span><h2>Bring-up order</h2></div>
-    <p class="sec-lead">Set voltages before anything downstream is connected — an unset AMS1117 pot can sit near 4.5 V and cook the 3 V coils.</p>
+    <p class="sec-lead">Set voltages before anything downstream is connected — an unset Buck B pot can sit well above 3.5 V and cook the 3 V coils.</p>
     <ol class="check">
-      <li>Bench the <b>MP1584</b> alone, set <b>5.00 V</b>, meter it. Then wire the 5 V rail.</li>
-      <li>Bench the <b>AMS1117</b> from 5 V, set <b>~3.5 V</b>, meter it — <b>before</b> it touches any relay VCC.</li>
+      <li>Wire the <b>IRF9540N</b> reverse-polarity guard + <b>TVS 1.5KE18A</b> front end first. Confirm the protected 12 V node reads correctly with the input plugged in normally — <b>and</b> reversed (should read ~0 V, nothing downstream damaged).</li>
+      <li>Bench <b>Buck A</b> alone from the protected 12 V node, set <b>5.00 V</b>, meter it, no load. Then wire the 5 V rail.</li>
+      <li>Bench <b>Buck B</b> alone from the protected 12 V node — not cascaded off 5 V — set <b>~3.5 V</b>, meter it — <b>before</b> it touches any relay VCC.</li>
       <li>Buzz out every row above with a meter (continuity + no shorts rail-to-GND). Tick as you go.</li>
       <li>Power 12 V. Confirm 5 V and 3.5 V rails present; confirm the Pico boots (RGB status).</li>
       <li>Confirm <code>data/config.json</code> has <code>LedPin</code> 10–13, then <code>pio run -e pico2w --target buildunified</code> → flash. Monitor 115200.</li>
       <li>Press each button → its relay <b>and</b> LED follow. Toggle from the web UI → the LED tracks too.</li>
-      <li>Relays should latch crisply off the stiff 3.5 V. If one is lazy, nudge the AMS1117 toward <b>~3.6 V</b> (still safe for a 3 V coil).</li>
+      <li>Relays should latch crisply off the stiff 3.5 V. If one is lazy, nudge <b>Buck B</b> toward <b>~3.6 V</b> (still safe for a 3 V coil).</li>
     </ol>
   </section>
 
